@@ -2,12 +2,13 @@ mod nbt_util;
 pub mod packets;
 
 use packets::serverbound::ServerBoundPacket;
-use packets::{read_packet, PacketEncoder, PlayerProperty};
+use packets::{read_packet, PacketDecoderExt, PacketEncoder, PlayerProperty};
+use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
-use std::thread;
-use tracing::warn;
+use std::{default, thread};
+use tracing::{debug, error, info, warn};
 
 pub use nbt_util::NBTCompound;
 
@@ -222,3 +223,136 @@ impl NetworkServer {
         }
     }
 }
+
+
+/*
+/// HACK: This represents the redstone component scripting networking api client
+pub struct RSCNetworkClient {
+    pub id: u32,
+    stream: TcpStream,
+    packets: mpsc::Receiver<Box<dyn ServerBoundPacket>>,
+}
+impl RSCNetworkClient {
+    fn listen(
+        mut stream: TcpStream,
+        sender: mpsc::Sender<Box<dyn ServerBoundPacket>>,
+
+    ) {
+        loop {
+            match stream.read_byte() {
+                Ok(cmd) => {
+                    let plot_x = stream.read_byte().unwrap();
+                    let plot_z = stream.read_byte().unwrap();
+                    let block_x = stream.read_u32::<LittleEndian>().unwrap();
+                    let block_y = stream.read_u32::<LittleEndian>().unwrap();
+                    let block_z = stream.read_u32::<LittleEndian>().unwrap();
+                    info!("RSC command: {} | plot: {},{} | pos: {}, {}, {}", cmd, plot_x, plot_z, block_x, block_y, block_z);
+                    let plot = 
+                    //stream.write_i8(cmd).unwrap();
+                    match cmd {
+                        1 => {
+                            // read a block
+                            info!("Read command");
+                            stream.write_i8(65).unwrap();
+                            stream.write_i8(65).unwrap();
+                            stream.write_i8(65).unwrap();
+                            stream.write_i8(10).unwrap();
+                            stream.write_i8(10).unwrap();
+                        },
+                        2 => {
+                            // write a block
+                            stream.write_i8(cmd).unwrap();
+                        },
+                        _ => {
+                            return;
+                        }
+                    };
+                },
+                Err(_) => {
+                    return;
+                }
+            };
+        }
+    }
+
+    pub fn receive_packets(&self, alive: &mut bool) -> Vec<Box<dyn ServerBoundPacket>> {
+        let mut packets = Vec::new();
+        loop {
+            let packet = self.packets.try_recv();
+            match packet {
+                Ok(packet) => packets.push(packet),
+                Err(mpsc::TryRecvError::Empty) => break,
+                _ => {
+                    *alive = false;
+                    break;
+                }
+            }
+        }
+        packets
+    }
+
+    pub fn send_packet(&self, data: &PacketEncoder) {
+        // TODO: every call to `send_packet` with the same PacketEncoder will
+        // lead to re-encoding the packet. It might be good to cache this.
+        let _ = data.write_uncompressed(&self.stream);
+    }
+
+    pub fn close_connection(&self) {
+        let _ = self.stream.shutdown(Shutdown::Both);
+    }
+}
+
+/// HACK: This represents the redstone component scripting networking api
+pub struct RSCNetworkServer {
+    client_receiver: mpsc::Receiver<RSCNetworkClient>,
+    server: MinecraftServer
+}
+
+impl RSCNetworkServer {
+    fn listen(bind_address: &str, sender: mpsc::Sender<RSCNetworkClient>) {
+        let listener = TcpListener::bind(bind_address).unwrap();
+
+        for (index, stream) in listener.incoming().enumerate() {
+            let stream = stream.unwrap();
+            let (packet_sender, packet_receiver) = mpsc::channel();
+            let client_stream = stream.try_clone().unwrap();
+            thread::spawn(move || {
+                RSCNetworkClient::listen(client_stream, packet_sender);
+            });
+            sender
+                .send(RSCNetworkClient {
+                    // The index will increment after each client making it unique. We'll just use this as the enitity id.
+                    id: index as u32,
+                    stream,
+                    packets: packet_receiver,
+                })
+                .unwrap();
+        }
+    }
+
+    /// Creates a new `RSCNetworkServer`. The server will then start accepting TCP clients.
+    pub fn new(bind_address: String, mc_server: MinecraftServer) -> RSCNetworkServer {
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || RSCNetworkServer::listen(&bind_address, sender));
+        RSCNetworkServer {
+            client_receiver: receiver,
+            server: mc_server
+        }
+    }
+
+
+    pub fn update(&mut self) {
+        loop {
+            match self.client_receiver.try_recv() {
+                Ok(_client) => {
+                    warn!("Connection from RSC client?!: {}", _client)
+                },
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    panic!("Client receiver channel disconnected!");
+                }
+            }
+        }
+    }
+}
+*/

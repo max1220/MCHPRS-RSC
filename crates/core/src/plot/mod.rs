@@ -898,6 +898,27 @@ impl Plot {
                         player.client.send_packet(&player_info);
                     }
                 }
+                BroadcastMessage::RSCGetBlock(plot_x, plot_z, block_x, block_y, block_z) => {
+                    warn!("HACK plot thread got RSCGetBlock: plot: {},{} | pos: {},{},{}", plot_x, plot_z, block_x, block_y, block_z);
+                    let pos = BlockPos::new(block_x, block_y, block_z);
+                    let block = self.world.get_block(pos);
+                    let broadcast_message = Message::RSCGetBlockReturn(
+                        self.world.x,
+                        self.world.z,
+                        block_x,
+                        block_y,
+                        block_z,
+                        block.get_id()
+                    );
+                    self.message_sender.send(broadcast_message).unwrap();
+                }
+                BroadcastMessage::RSCSetBlock(plot_x, plot_z,block_x, block_y, block_z, block) => {
+                    warn!("HACK plot thread got RSCSetBlock: plot: {},{} | pos: {},{},{} | block: {}", plot_x, plot_z, block_x, block_y, block_z, block);
+                    let pos: BlockPos = BlockPos::new(block_x, block_y, block_z);
+                    self.world.set_block(pos, mchprs_blocks::blocks::Block::from_id(block));
+                    // TODO: Is this necessary? 
+                    self.world.flush_block_changes();
+                }
             }
         }
         // Handle messages from the private message channel

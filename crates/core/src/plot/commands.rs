@@ -403,6 +403,15 @@ impl Plot {
                 let command = args.remove(0);
                 self.handle_redpiler_command(player, command, &args);
             }
+            "rsc_listen" => {
+                if args.is_empty() {
+                    self.players[player].send_error_message("Invalid number of arguments!");
+                    return false;
+                }
+                //let command = args.remove(0);
+                //let port = args.remove(0).parse::<i32>().unwrap();
+                //self.
+            }
             "speed" => {
                 if args.len() != 1 {
                     self.players[player].send_error_message("/speed <0-10>");

@@ -65,6 +65,7 @@ macro_rules! gen_config {
 
 gen_config! {
     bind_address: String = "0.0.0.0:25565".to_string(),
+    rsc_bind_address: String = "0.0.0.0:25566".to_string(),
     motd: String = "Minecraft High Performance Redstone Server".to_string(),
     chat_format: String = "<{username}> {message}".to_string(),
     max_players: i64 = 99999,
