@@ -1,3 +1,18 @@
+# max1220 MCHPRS test stuff
+
+I'm testing adding a RCON-like interface to the MCHPRS-server for implementing
+for high-speed I/O between redstone and a TCP connection.
+
+Currently a WIP prototype exists that accepts connections on a different port,
+and accepts simple read block/write block commands.
+
+This is my first time using Rust. The code is bad.
+
+This project is not in any way oficially associated with the MCHPRS project at large.
+(Allthough I like them :P)
+
+
+
 # Minecraft High-Performance Redstone Server
 
 [![Build Status](https://github.com/MCHPR/MCHPRS/actions/workflows/build.yml/badge.svg)](https://github.com/MCHPR/MCHPRS/actions/workflows/build.yml)
