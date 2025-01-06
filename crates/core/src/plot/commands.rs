@@ -13,6 +13,7 @@ use mchprs_redpiler::CompilerOptions;
 use mchprs_save_data::plot_data::{Tps, WorldSendRate};
 use mchprs_text::TextComponent;
 use once_cell::sync::Lazy;
+use std::net::{TcpListener, TcpStream};
 use std::ops::Add;
 use std::str::FromStr;
 use std::time::Instant;
@@ -404,13 +405,13 @@ impl Plot {
                 self.handle_redpiler_command(player, command, &args);
             }
             "rsc_listen" => {
-                if args.is_empty() {
+                if args.len() != 1 {
                     self.players[player].send_error_message("Invalid number of arguments!");
                     return false;
                 }
-                //let command = args.remove(0);
-                //let port = args.remove(0).parse::<i32>().unwrap();
-                //self.
+                let rsc_bind_addr= args.remove(0);
+                info!("RSC Listen command: {}", rsc_bind_addr);
+                self.rsc_listen(rsc_bind_addr);
             }
             "speed" => {
                 if args.len() != 1 {

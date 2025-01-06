@@ -67,8 +67,6 @@ pub enum Message {
     WhitelistRemove(u128, PlayerPacketSender),
     /// This message is sent to the server thread when a player runs /stop.
     Shutdown,
-    /// HACK This message is sent to the server thread when a player runs /stop.
-    RSCGetBlockReturn(i32, i32, i32, i32, i32, u32)
 }
 
 /// `BroadcastMessage` gets broadcasted from the server thread to all the plot threads.
@@ -90,20 +88,6 @@ pub enum BroadcastMessage {
     /// This message is broadcasted when the server is stopping, either through the stop
     /// command or through the ctrl+c handler.
     Shutdown,
-    /// HACK RSC control messages
-    RSCGetBlock(i32, i32, i32, i32, i32),
-    RSCSetBlock(i32, i32, i32, i32, i32, u32),
-}
-
-// communication with the RSC thread
-#[derive(Debug, Clone)]
-pub enum RSCRequest {
-    GetBlock(i32, i32, i32, i32, i32),
-    SetBlock(i32, i32, i32, i32, i32, u32),
-}
-#[derive(Debug, Clone)]
-pub enum RSCResponse {
-    GetBlockResp(i32, i32, i32, i32, i32, u32),
 }
 
 /// `PrivMessage` gets send from the server thread directly to a plot thread.
@@ -154,92 +138,10 @@ pub struct MinecraftServer {
     online_players: FxHashMap<u128, PlayerListEntry>,
     running_plots: Vec<PlotListEntry>,
     whitelist: Option<Vec<WhitelistEntry>>,
-    // HACK: extra channels for RSC threads
-    rsc_req_rx: Receiver<RSCRequest>,
-    rsc_req_tx: Sender<RSCRequest>,
-    rsc_resp_bus: Bus<RSCResponse>,
-    rsc_listener: TcpListener,
 }
 
 impl MinecraftServer {
     /// Start the server
-    
-    // This thread handles a single TCP connection, and sends RSCRequests to the main thread
-    // and in the future consumes RSCResponses from the main thread
-    pub fn rsc_handle(mut stream: TcpStream, tx: Sender<RSCRequest>, mut rx: bus::BusReader<RSCResponse>) {
-        info!("HACK RSC connection thread handling: {:?}", stream);
-        loop {
-            let _cmd = stream.read_i8();
-            if _cmd.is_err() {
-                warn!("Can't read command! Disconnect?");
-                break;
-            }
-            let cmd = _cmd.unwrap();
-            let plot_x = stream.read_i32::<LittleEndian>().unwrap();
-            let plot_z = stream.read_i32::<LittleEndian>().unwrap();
-            let block_x = stream.read_i32::<LittleEndian>().unwrap();
-            let block_y = stream.read_i32::<LittleEndian>().unwrap();
-            let block_z = stream.read_i32::<LittleEndian>().unwrap();
-            info!("HACK got cmd: {} | plot: {},{} | block: {},{},{}", cmd, plot_x, plot_z, block_x, block_y, block_z);
-            match cmd {
-                0 => {
-                    warn!("HACK RSC thread sending read block request");
-                    tx.send(RSCRequest::GetBlock(plot_x, plot_z, block_x, block_y, block_z)).unwrap();
-                    let resp = rx.recv();
-                    match resp {
-                        Ok(RSCResponse::GetBlockResp(plot_x, plot_z, block_x, block_y, block_z, block)) => {
-                            info!("HACK RSC thread sending response. plot: {} {} | pos: {} {} {} | block: {}", plot_x, plot_z, block_x, block_y, block_z, block);
-                            stream.write_i8(0).unwrap();
-                            stream.write_i32::<LittleEndian>(plot_x).unwrap();
-                            stream.write_i32::<LittleEndian>(plot_z).unwrap();
-                            stream.write_i32::<LittleEndian>(block_x).unwrap();
-                            stream.write_i32::<LittleEndian>(block_y).unwrap();
-                            stream.write_i32::<LittleEndian>(block_z).unwrap();
-                            stream.write_u32::<LittleEndian>(block).unwrap();
-                        },
-                        Err(_) => {}
-                    }
-                },
-                1 => {
-                    warn!("HACK Write block");
-                    let block_id = stream.read_u32::<LittleEndian>().unwrap();
-                    tx.send(RSCRequest::SetBlock(plot_x, plot_z, block_x, block_y, block_z, block_id)).unwrap();
-                },
-                _ => {
-                    warn!("HACK Unknown packet id!");
-                }
-            }
-        }
-    }
-
-    pub fn rsc_update(&mut self) {
-        // Listen to the RSC request thread to check if a command was provided by RSC over tcp
-        while let Ok(rsc_req) = self.rsc_req_rx.try_recv() {
-            info!("Server thread got RSC request: {:?}", rsc_req);
-            match rsc_req {
-                RSCRequest::GetBlock(plot_x, plot_y, block_x, block_y, block_z) => {
-                    self.broadcaster.broadcast(BroadcastMessage::RSCGetBlock(plot_x, plot_y, block_x, block_y, block_z));
-                }
-                RSCRequest::SetBlock(plot_x, plot_y, block_x, block_y, block_z, block) => {
-                    self.broadcaster.broadcast(BroadcastMessage::RSCSetBlock(plot_x, plot_y, block_x, block_y, block_z, block));
-                }
-            }
-        }
-        // accept incoming connections
-        match self.rsc_listener.accept() {
-            Ok((stream, _addr)) => {
-                info!("new client: {:?}", stream);
-                let tx = self.rsc_req_tx.clone();
-                let rx = self.rsc_resp_bus.add_rx();
-                thread::spawn(move || {
-                    Self::rsc_handle(stream, tx, rx);
-                });
-            },
-            Err(_) => {
-                
-            },
-        }
-    }
     
     pub fn run() {
         std::panic::set_hook(Box::new(|panic_info| {
@@ -264,16 +166,6 @@ impl MinecraftServer {
         let bus = Bus::new(100);
         let ctrl_handler_sender = plot_tx.clone();
 
-        // HACK: Star the RSC listening thread
-        let rsc_bind_addr = CONFIG.rsc_bind_address.clone();
-        info!("HACK RSC listening on: {}", rsc_bind_addr);
-        let (rsc_req_tx, rsc_req_rx) = mpsc::channel();
-        let rsc_resp_bus = Bus::new(100);
-        //let rsc_resp_rx = rsc_resp_bus.add_rx();
-        //thread::spawn(move || Self::rsc_listen(rsc_bind_addr, rsc_req_tx, rsc_resp_bus));
-        let rsc_listener = TcpListener::bind(rsc_bind_addr).unwrap();
-        rsc_listener.set_nonblocking(true).unwrap();
-        
         ctrlc::set_handler(move || {
             ctrl_handler_sender.send(Message::Shutdown).unwrap();
         })
@@ -302,10 +194,6 @@ impl MinecraftServer {
             online_players: FxHashMap::default(),
             running_plots: Vec::new(),
             whitelist,
-            rsc_req_rx, // HACK: listener for requests send by the RSC connection thread to the server thread
-            rsc_req_tx,
-            rsc_resp_bus,
-            rsc_listener: rsc_listener,
         };
 
         // Load the spawn area plot on server start
@@ -744,16 +632,10 @@ impl MinecraftServer {
                     sender.send_error_message("Whitelist is not enabled!");
                 }
             }
-
-            Message::RSCGetBlockReturn(plot_x, plot_y, block_x, block_y, block_z, block) => {
-                info!("HACK RSCGetBlockReturn {} {} | {} {} {} | {}", plot_x, plot_y, block_x, block_y, block_z, block);
-                self.rsc_resp_bus.broadcast(RSCResponse::GetBlockResp(plot_x, plot_y, block_x, block_y, block_z, block));
-            }
         }
     }
 
     fn update(&mut self) {
-        self.rsc_update();
 
         while let Ok(message) = self.receiver.try_recv() {
             self.handle_message(message);
