@@ -5,7 +5,7 @@ use crate::plot::{self, database, Plot, PLOT_BLOCK_HEIGHT};
 use crate::utils::HyphenatedUUID;
 use crate::{permissions, utils};
 use backtrace::Backtrace;
-use bus::{Bus, BusReader};
+use bus::Bus;
 use hmac::{Hmac, Mac};
 use mchprs_network::packets::clientbound::{
     CConfigurationPluginMessage, CDisconnectLogin, CFinishConfiguration, CGameEvent,
@@ -27,17 +27,12 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::Sha256;
-use std::borrow::Borrow;
 use std::fs::{self, File};
 use std::io::Cursor;
 use std::path::Path;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
-
-use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
-use std::net::{Shutdown, TcpListener, TcpStream};
-use std::{default, thread};
 
 pub const MC_VERSION: &str = "1.20.4";
 pub const MC_DATA_VERSION: i32 = 3700;

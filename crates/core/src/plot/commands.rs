@@ -12,8 +12,8 @@ use mchprs_network::PlayerPacketSender;
 use mchprs_redpiler::CompilerOptions;
 use mchprs_save_data::plot_data::{Tps, WorldSendRate};
 use mchprs_text::TextComponent;
+use mchprs_world::World;
 use once_cell::sync::Lazy;
-use std::net::{TcpListener, TcpStream};
 use std::ops::Add;
 use std::str::FromStr;
 use std::time::Instant;
@@ -404,15 +404,6 @@ impl Plot {
                 let command = args.remove(0);
                 self.handle_redpiler_command(player, command, &args);
             }
-            "rsc_listen" => {
-                if args.len() != 1 {
-                    self.players[player].send_error_message("Invalid number of arguments!");
-                    return false;
-                }
-                let rsc_bind_addr= args.remove(0);
-                info!("RSC Listen command: {}", rsc_bind_addr);
-                self.rsc_listen(rsc_bind_addr);
-            }
             "speed" => {
                 if args.len() != 1 {
                     self.players[player].send_error_message("/speed <0-10>");
@@ -523,6 +514,40 @@ impl Plot {
                 self.players[player]
                     .send_system_message("The world send rate was successfully set.");
             }
+            "rsc_listen" => {
+                if args.len() != 1 {
+                    self.players[player].send_error_message("Invalid number of arguments!");
+                    return false;
+                }
+                let rsc_bind_addr= args.remove(0);
+                info!("RSC Listen command: {}", rsc_bind_addr);
+                self.rsc_listen(rsc_bind_addr);
+            }
+            "freeze" => {
+                warn!("freeze chat command");
+                self.disable_ticking = true;
+            },
+            "unfreeze" => {
+                warn!("unfreeze chat command");
+                self.disable_ticking = false;
+            },
+            "binfo" | "block_info" => {
+                warn!("block_info chat command");
+                let pos = self.players[player].pos.block_pos();
+                let block = self.world.get_block(pos);
+                self.players[player].send_chat_message(&TextComponent::from_legacy_text(
+                    &format!("&6Position is {})", pos),
+                ));
+                self.players[player].send_chat_message(&TextComponent::from_legacy_text(
+                    &format!("&aBlock({}) is {:?})", block.get_id(), block),
+                ));
+            },
+            "pause_on_block" => {
+                warn!("pause_ob_block chat command");
+                self.pause_on_block_pos = Some(self.players[player].pos.block_pos());
+                self.pause_on_block_cur = Some(self.world.get_block(self.pause_on_block_pos.unwrap()));
+                warn!("Will pause game when block at {:?} is not {:?}.", self.pause_on_block_pos, self.pause_on_block_cur);
+            },
             _ => self.players[player].send_error_message("Command not found!"),
         }
         false

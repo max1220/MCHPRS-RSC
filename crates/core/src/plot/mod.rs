@@ -7,6 +7,7 @@ mod packet_handlers;
 mod scoreboard;
 pub mod worldedit;
 
+use bus::Bus;
 use rsc::RSCRequest;
 use rsc::RSCResponse;
 
@@ -35,7 +36,7 @@ use monitor::TimingsMonitor;
 use scoreboard::RedpilerState;
 use std::cmp::Ordering;
 use std::collections::HashSet;
-use std::net::{TcpListener, TcpStream};
+use std::net::TcpListener;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
@@ -98,9 +99,15 @@ pub struct Plot {
     async_rt: Runtime,
     scoreboard: Scoreboard,
 
+    disable_ticking: bool,
+    pause_on_block_pos: Option<BlockPos>,
+    pause_on_block_cur: Option<Block>,
+    pause_on_block_repeat: bool,
+
+    rsc_waiting_for_pause: bool,
     rsc_listener: Option<TcpListener>,
-    rsc_req_rx: Option<Receiver<RSCRequest>>,
-    rsc_resp_tx: Option<Sender<RSCResponse>>,
+    rsc_resp_bus: Option<Bus<RSCResponse>>,
+    rsc_req_ch: Option<(Sender<RSCRequest>, Receiver<RSCRequest>)>,
 }
 
 pub struct PlotWorld {
@@ -294,6 +301,27 @@ impl Plot {
         while self.world.to_be_ticked.first().map_or(1, |e| e.ticks_left) == 0 {
             let entry = self.world.to_be_ticked.remove(0);
             mchprs_redstone::tick(self.world.get_block(entry.pos), &mut self.world, entry.pos);
+        }
+
+        // observe the block position
+        if self.pause_on_block_pos.is_some() {
+            let new = self.world.get_block(self.pause_on_block_pos.unwrap());
+            if new != self.pause_on_block_cur.unwrap() {
+                warn!("pause_on_block change observed!");
+                if let Some(bus) = self.rsc_resp_bus.as_mut() {
+                    if self.rsc_waiting_for_pause {
+                        warn!("Notifying the RSC threads");
+                        let p = self.pause_on_block_pos.unwrap();
+                        bus.broadcast(RSCResponse::ObserveBlockResp(p.x, p.y, p.z, new.get_id()));
+                        self.rsc_waiting_for_pause = false
+                    }
+                }
+                if !self.pause_on_block_repeat {
+                    self.pause_on_block_pos = None;
+                    self.pause_on_block_cur = None;
+                }
+                self.disable_ticking = true;
+            }
         }
     }
 
@@ -1004,7 +1032,7 @@ impl Plot {
                 }
             };
 
-            let batch_size = match self.tps {
+            let mut batch_size = match self.tps {
                 Tps::Limited(tps) if tps != 0 => {
                     let dur_per_tick = Duration::from_nanos(1_000_000_000 / tps as u64);
                     self.lag_time += now - self.last_update_time;
@@ -1015,6 +1043,8 @@ impl Plot {
                 Tps::Unlimited => max_batch_size,
                 _ => 0,
             };
+
+            if self.disable_ticking { batch_size = 0; }
 
             self.last_update_time = now;
             if batch_size != 0 {
@@ -1158,9 +1188,14 @@ impl Plot {
             async_rt: Plot::create_async_rt(),
             scoreboard: Default::default(),
             world,
+            pause_on_block_cur: None,
+            pause_on_block_pos: None,
+            pause_on_block_repeat: false,
+            disable_ticking: false,
+            rsc_waiting_for_pause: false,
             rsc_listener: None,
-            rsc_req_rx: None,
-            rsc_resp_tx: None,
+            rsc_resp_bus: None,
+            rsc_req_ch: None,
         }
     }
 

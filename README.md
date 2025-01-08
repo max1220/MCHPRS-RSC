@@ -9,8 +9,74 @@ and accepts simple read block/write block commands.
 This is my first time using Rust. The code is bad.
 
 This project is not in any way oficially associated with the MCHPRS project at large.
-(Allthough I like them :P)
+(Although I like them :P)
 
+
+
+## Added commands
+
+Some new commands have been added for this interface.
+
+ * `rsc_listen <bind address>`
+  - This command starts the TCP listener thread and binds to the specified address:port
+
+ * `freeze`
+  - This freezes redstone ticks
+
+ * `unfreeze`
+  - This unfreezes redstone ticks
+
+ * `binfo`
+  - Shows info about the block at the players feet.
+
+ * `pause_on_block`
+  - Pauses the game when the block at position of the players feet changes
+    (This might interfere with the observing functionality of the RSC commands.
+    Only a single block can be observed/paused at a time.)
+
+
+
+## RSC protocol
+
+The RSC protocol is a very simple binary protocol. 
+
+A client can send one of 7 request packets,
+two of which(GetBlock and ObserveBlock) send a reply back.
+
+The first byte in a package is always a packet ID.
+The other data types used in packets are signed and unsigned 32-bit little-endian integers.
+
+
+### Requests
+
+GetBlock: `<u8 0><i32 x><i32 y><i32 z>` (Server send GetBlockResp)
+
+SetBlock: `<u8 1><i32 x><i32 y><i32 z><u32 block_id>`
+
+ObserveBlock: `<u8 2><i32 x><i32 y><i32 z>` (Server send ObserveBlockResp)
+
+UpdateBlock: `<u8 3><i32 x><i32 y><i32 z>`
+
+Freeze: `<u8 4>`
+
+Unfreeze: `<u8 5>`
+
+Step: `<u8 6>`
+
+
+### Responses
+
+GetBlockResp: `<u8 0><i32 x><i32 y><i32 z><u32 block_id>`
+
+ObserveBlockResp: `<u8 0><i32 x><i32 y><i32 z><u32 block_id>`
+
+
+
+----------------------------
+
+# Original README:
+
+----------------------------
 
 
 # Minecraft High-Performance Redstone Server
