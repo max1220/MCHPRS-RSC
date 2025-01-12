@@ -307,10 +307,10 @@ impl Plot {
         if self.pause_on_block_pos.is_some() {
             let new = self.world.get_block(self.pause_on_block_pos.unwrap());
             if new != self.pause_on_block_cur.unwrap() {
-                warn!("pause_on_block change observed!");
+                debug!("pause_on_block change observed!");
                 if let Some(bus) = self.rsc_resp_bus.as_mut() {
                     if self.rsc_waiting_for_pause {
-                        warn!("Notifying the RSC threads");
+                        debug!("RSC is waiting for response, broadcasting ObserveBlockResp");
                         let p = self.pause_on_block_pos.unwrap();
                         bus.broadcast(RSCResponse::ObserveBlockResp(p.x, p.y, p.z, new.get_id()));
                         self.rsc_waiting_for_pause = false
@@ -1011,8 +1011,6 @@ impl Plot {
     fn update(&mut self) {
         self.handle_messages();
 
-        self.rsc_update();
-
         // Only tick if there are players in the plot
         if !self.players.is_empty() {
             self.timings.set_ticking(true);
@@ -1249,6 +1247,7 @@ impl Plot {
         while self.running {
             // Fast path, for super high RTPS
             if self.sleep_time <= Duration::from_millis(5) && !self.players.is_empty() {
+                self.rsc_update();
                 self.update();
                 if self.tps != Tps::Unlimited {
                     thread::yield_now();
@@ -1256,13 +1255,16 @@ impl Plot {
                 continue;
             }
 
+            self.rsc_update();
             let before = Instant::now();
             self.update();
-            let delta = Instant::now().duration_since(before);
+            let delta = before.elapsed();
 
             if delta < self.sleep_time {
                 let sleep_time = self.sleep_time - delta;
-                thread::sleep(sleep_time);
+                //thread::sleep(sleep_time);
+                //thread::sleep(Duration::from_millis(5));
+                thread::yield_now();
             } else {
                 thread::yield_now();
             }
