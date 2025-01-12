@@ -71,6 +71,85 @@ ObserveBlockResp: `<u8 0><i32 x><i32 y><i32 z><u32 block_id>`
 
 
 
+## Lua RSC client library
+
+A Lua client library for using RSC is available in the `rsc_lib.lua` file.
+It exports a single function, `make_rsc_client(con)`, which takes a single
+TCP connection argument and return a client handle.
+
+Available client functions:
+
+ * `client.set_block(id, x,y,z)` - set block
+ * `id = client.get_block(x,y,z)` - read block
+ * `id = client.observe_block(x,y,z)` - wait for block change
+ * `client.update_block(x,y,z)` - update (surrounding) blocks after set
+ * `client.freeze()` - disable redstone ticking
+ * `client.unfreeze()` - enable redstone ticking
+ * `client.step(n)` - run n redstone ticks
+
+
+
+## Lua script runner
+
+Using the client library a script runner is provided which makes writing
+RSC scripts even easier.
+
+The `rsc_run.lua <address> <port> <script> <args> <...>` script
+will connect to the specified RSC server, and start to run the `script` file.
+If no `script` is provided, an interactive shell is provided for the user to type commands.
+Available functions in the script are the same as with the client library, but
+don't need to be pre-fixed by `client.`.
+
+Some example scripts are provided in the `scripts/` directory. You can run them as: 
+
+```
+# WARNING: This might set blocks in your plot! Make backups!
+
+# play back a video file using ffmpeg
+ffmpeg -re -i ~/video_file.webm -c:v rawvideo -r 10 -s 80x60 -f rawvideo -pix_fmt gray - | ./rsc_run.lua 127.0.0.1 25566 script/rawvideo.lua
+
+# provided unlimited 0-tick read/writeable memory of any address and data size, read initial data from test.bin:
+./rsc_run.lua 127.0.0.1 25566 script/memory.lua test.bin
+
+# measure get_block latency(for testing)
+./rsc_run.lua 127.0.0.1 25566 script/latency.lua
+
+# example script(demonstrates every command)
+./rsc_run.lua 127.0.0.1 25566 script/latency.lua
+```
+
+
+
+
+## CGI script(HTTP JSON API)
+
+A CGI script has been implemented using the Lua client library.
+
+Using this CGI script the entire API can be accessed using HTTP as well.
+
+By default the CGI script will try to connect to 127.0.0.1:25566 for it's RSC connection.
+If you want to change that, edit the address and port in the `rsc_api.lua` script.
+
+To run a simple test server, enter the `www/` directory and run the busybox httpd server:
+
+```
+busybox httpd -v -f -p 8080
+```
+
+You can now send API requests to `http://[your ip or localhost]:8080/cgi-bin/rsc_api.lua`., e.g.:
+
+```
+curl "http://127.0.0.1:8080/cgi-bin/rsc_api.lua?command=set_block&x=0&y=0&z=0&block_id=0"
+curl "http://127.0.0.1:8080/cgi-bin/rsc_api.lua?command=get_block&x=0&y=0&z=0"
+curl "http://127.0.0.1:8080/cgi-bin/rsc_api.lua?command=observe_block&x=0&y=0&z=0"
+curl "http://127.0.0.1:8080/cgi-bin/rsc_api.lua?command=update_block&x=0&y=0&z=0"
+curl "http://127.0.0.1:8080/cgi-bin/rsc_api.lua?command=freeze"
+curl "http://127.0.0.1:8080/cgi-bin/rsc_api.lua?command=unfreeze"
+curl "http://127.0.0.1:8080/cgi-bin/rsc_api.lua?command=step&n=1"
+```
+
+
+
 ----------------------------
 
 # Original README:

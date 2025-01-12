@@ -23,15 +23,6 @@ local block_ids = {
 }
 
 
-local function measure(f, ...)
-	local time = require("time")
-	local start = time.gettime()
-	local function capture_args(...) local t = {...}; t.n = select("#", ...); return t end
-	local ret = capture_args(f(...))
-	local stop = time.gettime()
-	return stop-start, unpack(ret, 1, ret.n)
-end
-
 
 -- memory storage used by the redstone build.
 -- unused cells default to returning 0
@@ -140,10 +131,8 @@ while true do
 	-- wait for a clock signal(also leaves the game in a tick-frozen state)
 	wait_for_clock(unpack(config.clock_pos))
 
-	print("Updating...");
-
-	local dt = measure(update)
-	print("Update took:", dt*1000)
+	--- update the memory state(perform read/write)
+	update()
 
 	-- re-start the game again(frozen by wait_for_clock)
 	unfreeze()
