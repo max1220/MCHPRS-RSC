@@ -533,7 +533,8 @@ impl Plot {
             },
             "binfo" | "block_info" => {
                 warn!("block_info chat command");
-                let pos = self.players[player].pos.block_pos();
+                let mut pos = self.players[player].pos.block_pos();
+                pos.y -= 1;
                 let block = self.world.get_block(pos);
                 self.players[player].send_chat_message(&TextComponent::from_legacy_text(
                     &format!("&6Position is {})", pos),

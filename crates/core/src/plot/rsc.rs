@@ -4,7 +4,7 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use mchprs_blocks::{blocks::Block, BlockPos};
 use mchprs_world::World;
 use std::{io::{BufReader, BufWriter, Write}, net::{TcpListener, TcpStream}, sync::mpsc::{self, Sender}, thread};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tracing::{debug, info, warn};
 
 #[derive(Debug, Clone)]
@@ -150,41 +150,50 @@ impl Plot {
 	// check if the RSC connections sent any requests and handle them(called from rsc_update in plot thread)
 	fn rsc_plot_handle(&mut self, timeout: Option<Duration>) {
 		loop {
-			let req = self.rsc_req_ch.as_mut().unwrap().1.try_recv();
+			let req: RSCRequest;
+			if timeout.is_some() {
+				let res = self.rsc_req_ch.as_mut().unwrap().1.recv_timeout(timeout.unwrap());
+				if res.is_ok() { req = res.unwrap(); }
+				else { break; }
+			} else {
+				let res = self.rsc_req_ch.as_mut().unwrap().1.try_recv();
+				if res.is_ok() { req = res.unwrap(); }
+				else { break; }
+			}
 			match req {
-				Ok(RSCRequest::GetBlock(block_x, block_y, block_z)) => {
+				RSCRequest::GetBlock(block_x, block_y, block_z) => {
 					let pos = BlockPos::new(block_x, block_y, block_z);
 					debug!("[RSC plot handle] received GetBlock request {:?}", pos);
 					let block = self.world.get_block(pos);
 					self.rsc_resp_bus.as_mut().unwrap().broadcast(RSCResponse::GetBlockResp(block_x, block_y, block_z, block.get_id()));
 				},
-				Ok(RSCRequest::SetBlock(block_x, block_y, block_z, block_id)) => {
+				RSCRequest::SetBlock(block_x, block_y, block_z, block_id) => {
 					let pos = BlockPos::new(block_x, block_y, block_z);
 					debug!("[RSC plot handle] received SetBlock request {:?} -> {:?}", pos, block_id);
 					self.world.set_block(pos, Block::from_id(block_id));
 					self.send_block_change(pos, block_id);
 				},
-				Ok(RSCRequest::ObserveBlock(block_x, block_y, block_z)) => {
+				RSCRequest::ObserveBlock(block_x, block_y, block_z) => {
 					let pos = BlockPos::new(block_x, block_y, block_z);
 					debug!("[RSC plot handle] received ObserveBlock request {:?}", pos);
 					self.pause_on_block_pos = Some(pos);
 					self.pause_on_block_cur = Some(self.world.get_block(pos));
 					self.rsc_waiting_for_pause = true;
 				},
-				Ok(RSCRequest::UpdateBlock(block_x, block_y, block_z)) => {
+				RSCRequest::UpdateBlock(block_x, block_y, block_z) => {
 					let pos = BlockPos::new(block_x, block_y, block_z);
 					debug!("[RSC plot handle] received UpdateBlock request {:?}", pos);
 					mchprs_redstone::update_surrounding_blocks(&mut self.world, pos);
 				},
-				Ok(RSCRequest::EnableTicking()) => {
+				RSCRequest::EnableTicking() => {
 					debug!("[RSC plot handle] received EnableTicking request");
 					self.disable_ticking = false;
 				},
-				Ok(RSCRequest::DisableTicking()) => {
+				RSCRequest::DisableTicking() => {
 					debug!("[RSC plot handle] received DisableTicking request");
 					self.disable_ticking = true;
 				},
-				Ok(RSCRequest::TickAdvance(ticks)) => {
+				RSCRequest::TickAdvance(ticks) => {
 					debug!("[RSC plot handle] TickAdvance request");
 					for _ in 0..ticks {
 						self.tick();
@@ -193,7 +202,6 @@ impl Plot {
 						self.redpiler.flush(&mut self.world);
 					}
 				},
-				Err(_) => { break; }
 			}
 		}
 	}
