@@ -26,7 +26,7 @@ local block_ids = {
 local function measure(f, ...)
 	local time = require("time")
 	local start = time.gettime()
-	local function capture_args(...) t = {...}; t.n = select("#", ...); return t end
+	local function capture_args(...) local t = {...}; t.n = select("#", ...); return t end
 	local ret = capture_args(f(...))
 	local stop = time.gettime()
 	return stop-start, unpack(ret, 1, ret.n)
@@ -143,7 +143,7 @@ while true do
 	print("Updating...");
 
 	local dt = measure(update)
-	print("Update took:", dt)
+	print("Update took:", dt*1000)
 
 	-- re-start the game again(frozen by wait_for_clock)
 	unfreeze()

@@ -1,4 +1,4 @@
-# max1220 MCHPRS test stuff
+# MCHPRS-RSC
 
 I'm testing adding a RCON-like interface to the MCHPRS-server for implementing
 for high-speed I/O between redstone and a TCP connection.
@@ -6,10 +6,9 @@ for high-speed I/O between redstone and a TCP connection.
 Currently a WIP prototype exists that accepts connections on a different port,
 and accepts simple read block/write block commands.
 
-This is my first time using Rust. The code is bad.
+This is my first time using Rust. The code is (probably) bad.
 
-This project is not in any way oficially associated with the MCHPRS project at large.
-(Although I like them :P)
+This project is not in any way officially associated with the MCHPRS project at large.
 
 
 
@@ -18,21 +17,21 @@ This project is not in any way oficially associated with the MCHPRS project at l
 Some new commands have been added for this interface.
 
  * `rsc_listen <bind address>`
-  - This command starts the TCP listener thread and binds to the specified address:port
+   - This command starts the TCP listener thread and binds to the specified address:port
 
  * `freeze`
-  - This freezes redstone ticks
+   - This freezes redstone ticks
 
  * `unfreeze`
-  - This unfreezes redstone ticks
+   - This unfreezes redstone ticks
 
  * `binfo`
-  - Shows info about the block at the players feet.
+   - Shows info about the block at the players feet.
 
  * `pause_on_block`
-  - Pauses the game when the block at position of the players feet changes
-    (This might interfere with the observing functionality of the RSC commands.
-    Only a single block can be observed/paused at a time.)
+   - Pauses the game when the block at position of the players feet changes
+     (This might interfere with the observing functionality of the RSC commands.
+     Only a single block can be observed/paused at a time.)
 
 
 

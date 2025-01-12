@@ -12,40 +12,37 @@ local port = assert(table.remove(arg, 1), "Second command-line argument needs to
 assert(tcp:connect("127.0.0.1", 25566), ("Can't connect to: %q with port: %d"):format(tostring(addr), tostring(port)))
 
 
-
--- basic socket read/write functions for integers
-local function receive_u8() return tcp:receive(1):byte() end
-local function receive_u32()
-	local a = tcp:receive(1):byte()
-	local b = tcp:receive(1):byte()
-	local c = tcp:receive(1):byte()
-	local d = tcp:receive(1):byte()
+-- packing/unpacking functions
+local function decode_u8(data, i) return data:byte(i); end
+local function decode_u32(data, i)
+	local a,b,c,d = assert(data:byte(i,i+3))
 	return bit.bor(bit.bor(bit.bor(a, bit.lshift(b, 8)), bit.lshift(c, 16)), bit.lshift(d, 24))
 end
-local function send_u8(i) tcp:send(string.char(i)) end
-local function send_u32(i)
+local function encode_u8(i) return string.char(i); end
+local function encode_u32(i)
 	local a = bit.band(i, 0xff)
 	local b = bit.band(bit.rshift(i, 8), 0xff)
 	local c = bit.band(bit.rshift(i,16), 0xff)
 	local d = bit.band(bit.rshift(i,24), 0xff)
-	tcp:send(string.char(a,b,c,d))
+	return string.char(a,b,c,d)
 end
 
 
 
--- socket read/write functions for packets
+-- socket read/write functions for RSC packets
+local function send_packet_cmd(cmd) tcp:send(string.char(cmd)) end
+local function send_packet_cmd_i(cmd, i) tcp:send(string.char(cmd)..encode_u32(i)) end
 local function send_packet_cmd_xyz(cmd, x,y,z)
-	send_u8(cmd)
-	send_u32(x)
-	send_u32(y)
-	send_u32(z)
+	tcp:send(encode_u8(cmd)..encode_u32(x)..encode_u32(y)..encode_u32(z))
+end
+local function send_packet_cmd_xyzi(cmd, i, x,y,z)
+	tcp:send(encode_u8(cmd)..encode_u32(x)..encode_u32(y)..encode_u32(z)..encode_u32(i))
 end
 local function send_get_block(x,y,z)
 	send_packet_cmd_xyz(0, x,y,z)
 end
 local function send_set_block(block_id, x,y,z)
-	send_packet_cmd_xyz(1, x,y,z)
-	send_u32(block_id)
+	send_packet_cmd_xyzi(1, block_id, x,y,z)
 end
 local function send_observe_block(x,y,z)
 	send_packet_cmd_xyz(2, x,y,z)
@@ -53,22 +50,26 @@ end
 local function send_update_block(x,y,z)
 	send_packet_cmd_xyz(3, x,y,z)
 end
-
-local function receive_cmd_xyz_resp(cmd, x, y, z)
-	assert(receive_u8()==cmd)
-	local resp_x, resp_y, resp_z = receive_u32(), receive_u32(), receive_u32()
-	assert((resp_x==x) and (resp_y==y) and (resp_z==z), ("xyz is: %d %d %d"):format(resp_x, resp_y, resp_z))
-	return x, y, z
+local function receive_cmd_xyzi_resp(cmd, assert_x, assert_y, assert_z)
+	local packet = tcp:receive(17)
+	assert(decode_u8(packet, 1)==cmd)
+	local resp_x = decode_u32(packet, 2)
+	local resp_y = decode_u32(packet, 6)
+	local resp_z = decode_u32(packet, 10)
+	local resp_i = decode_u32(packet, 14)
+	if assert_x ~= nil then
+		assert(
+			(resp_x==assert_x) and (resp_y==assert_y) and (resp_z==assert_z),
+			("xyz is: %d %d %d, expected: %d %d %d"):format(resp_x, resp_y, resp_z, assert_x, assert_y, assert_z)
+		)
+	end
+	return resp_x, resp_y, resp_z, resp_i
 end
 local function receive_get_block_resp(x, y, z)
-	receive_cmd_xyz_resp(0, x, y, z)
-	local block_id = receive_u32()
-	return x, y, z, block_id
+	return receive_cmd_xyzi_resp(0, x, y, z)
 end
 local function receive_observe_block_resp(x, y, z)
-	receive_cmd_xyz_resp(1, x, y, z)
-	local block_id = receive_u32()
-	return x, y, z, block_id
+	return receive_cmd_xyzi_resp(1, x, y, z)
 end
 
 
@@ -89,9 +90,9 @@ end
 function update_block(x, y, z)
 	send_update_block(x, y, z)
 end
-function freeze() send_u8(4) end
-function unfreeze() send_u8(5) end
-function step(n) send_u8(6); send_u32(n) end
+function freeze() send_packet_cmd(4) end
+function unfreeze() send_packet_cmd(5) end
+function step(n) send_packet_cmd_i(6, n) end
 
 
 
@@ -100,10 +101,18 @@ local script_path = table.remove(arg, 1)
 if script_path then
 	dofile(script_path)
 else
-	print("No script provided!")
-	print("Running in interactive mode.")
-	print()
-	print("Functions:")
-	print()
+	print([[
+No script provided!
+Running in interactive mode(Lua REPL).
+
+Available functions:
+ * set_block(id, x,y,z)      -- set block
+ * id = get_block(x,y,z)     -- read block
+ * id = observe_block(x,y,z) -- wait for block change
+ * update_block(x,y,z)       -- update (surrounding) blocks after set
+ * freeze()                  -- disable redstone ticking
+ * unfreeze()                -- enable redstone ticking
+ * step(n)                   -- run n redstone ticks
+]])
 	debug.debug()
 end
