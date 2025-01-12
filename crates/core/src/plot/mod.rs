@@ -1247,7 +1247,7 @@ impl Plot {
         while self.running {
             // Fast path, for super high RTPS
             if self.sleep_time <= Duration::from_millis(5) && !self.players.is_empty() {
-                self.rsc_update();
+                self.rsc_update(None);
                 self.update();
                 if self.tps != Tps::Unlimited {
                     thread::yield_now();
@@ -1255,17 +1255,15 @@ impl Plot {
                 continue;
             }
 
-            self.rsc_update();
             let before = Instant::now();
             self.update();
-            let delta = before.elapsed();
+            let delta: Duration = before.elapsed();
 
             if delta < self.sleep_time {
-                let sleep_time = self.sleep_time - delta;
-                //thread::sleep(sleep_time);
-                //thread::sleep(Duration::from_millis(5));
-                thread::yield_now();
+                let sleep_time: Duration = self.sleep_time - delta;
+                self.rsc_update(Some(sleep_time));
             } else {
+                self.rsc_update(None);
                 thread::yield_now();
             }
         }

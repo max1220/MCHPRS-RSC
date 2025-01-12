@@ -4,6 +4,7 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use mchprs_blocks::{blocks::Block, BlockPos};
 use mchprs_world::World;
 use std::{io::{BufReader, BufWriter, Write}, net::{TcpListener, TcpStream}, sync::mpsc::{self, Sender}, thread};
+use std::time::{Duration, Instant};
 use tracing::{debug, info, warn};
 
 #[derive(Debug, Clone)]
@@ -147,9 +148,10 @@ impl Plot {
 	}
 
 	// check if the RSC connections sent any requests and handle them(called from rsc_update in plot thread)
-	fn rsc_plot_handle(&mut self) {
+	fn rsc_plot_handle(&mut self, timeout: Option<Duration>) {
 		loop {
-			match self.rsc_req_ch.as_mut().unwrap().1.try_recv() {
+			let req = self.rsc_req_ch.as_mut().unwrap().1.try_recv();
+			match req {
 				Ok(RSCRequest::GetBlock(block_x, block_y, block_z)) => {
 					let pos = BlockPos::new(block_x, block_y, block_z);
 					debug!("[RSC plot handle] received GetBlock request {:?}", pos);
@@ -220,7 +222,7 @@ impl Plot {
     }
 
 	// called to update the RSC connections in the plot thread
-	pub(super) fn rsc_update(&mut self) {
+	pub(super) fn rsc_update(&mut self, timeout: Option<Duration>) {
 		// only relevant if a listener is present
 		if self.rsc_listener.is_none() { return; }
 
@@ -228,6 +230,6 @@ impl Plot {
 		self.rsc_accept();
 
 		// check if the RSC connections sent any requests
-		self.rsc_plot_handle();
+		self.rsc_plot_handle(timeout);
 	}
 }
