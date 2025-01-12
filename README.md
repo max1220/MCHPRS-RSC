@@ -1,37 +1,42 @@
 # MCHPRS-RSC
 
-I'm testing adding a RCON-like interface to the MCHPRS-server for implementing
-for high-speed I/O between redstone and a TCP connection.
+This repository contains a fork of the MCHPRS Minecraft high-performance redstone server
+that adds an RCON-like protocol called RSC.
 
-Currently a WIP prototype exists that accepts connections on a different port,
-and accepts simple read block/write block commands.
+RSC is binary protocol running over TCP and enables extending redstone functionality
+without modifications to server software, by allowing fast and synchronized
+I/O(reading/writing/observing blocks etc.) with a Minecraft world from an external program.
 
-This is my first time using Rust. The code is (probably) bad.
+The example scripts give some idea of what can be possible with this protocol:
 
-This project is not in any way officially associated with the MCHPRS project at large.
+The `memory.lua` script implements external memory that can be connected to a redstone build,
+so that a redstone build can use gigabytes of fast redstone-addressable memory.
+
+The `rawvideo.lua` script implements simple video streaming from a video source
+to a display in Minecraft.
+
+The `rsc_api.lua` CGI script wraps the RSC API for the web, enabling extensions
+to be written in JavaScript for the browser.
+
+This fork is *not in any way* officially associated with the official MCHPRS project.
 
 
 
-## Added commands
+## Added chat commands
 
-Some new commands have been added for this interface.
+Some new chat commands have been added for this interface.
+All these commands apply to the current plot.
 
- * `rsc_listen <bind address>`
-   - This command starts the TCP listener thread and binds to the specified address:port
+| Chat command | Description | 
+| --- | --- |
+| `rsc_listen <bind address>` | Start the TCP listener thread and binds to the specified address:port |
+| `freeze` | Freeze redstone ticks |
+| `unfreeze` | Unfreeze redstone ticks |
+| `binfo` | Show info about the block under the players feet |
+| `pause_on_block` | Pauses the game when the block at position of the players feet changes |
 
- * `freeze`
-   - This freezes redstone ticks
-
- * `unfreeze`
-   - This unfreezes redstone ticks
-
- * `binfo`
-   - Shows info about the block at the players feet.
-
- * `pause_on_block`
-   - Pauses the game when the block at position of the players feet changes
-     (This might interfere with the observing functionality of the RSC commands.
-     Only a single block can be observed/paused at a time.)
+(Pausing might interfere with the observing functionality of the RSC observe commands.
+Only a single block can be observed at a time.)
 
 
 
@@ -48,44 +53,48 @@ The other data types used in packets are signed and unsigned 32-bit little-endia
 
 ### Requests
 
-GetBlock: `<u8 0><i32 x><i32 y><i32 z>` (Server send GetBlockResp)
+These requests can be sent to a RSC server from a RSC client.
 
-SetBlock: `<u8 1><i32 x><i32 y><i32 z><u32 block_id>`
-
-ObserveBlock: `<u8 2><i32 x><i32 y><i32 z>` (Server send ObserveBlockResp)
-
-UpdateBlock: `<u8 3><i32 x><i32 y><i32 z>`
-
-Freeze: `<u8 4>`
-
-Unfreeze: `<u8 5>`
-
-Step: `<u8 6>`
+| Request type | Packet format | Server response
+| --- | --- | --- |
+| GetBlock | `<u8 0><i32 x><i32 y><i32 z>` | GetBlockResp |
+| SetBlock | `<u8 1><i32 x><i32 y><i32 z><u32 block_id>` |  |
+| ObserveBlock | `<u8 2><i32 x><i32 y><i32 z>` | ObserveBlockResp |
+| UpdateBlock | `<u8 3><i32 x><i32 y><i32 z>` |  |
+| Freeze | `<u8 4>` |  |
+| Unfreeze | `<u8 5>` |  |
+| Step | `<u8 6><i32 n>` |  |
 
 
 ### Responses
 
-GetBlockResp: `<u8 0><i32 x><i32 y><i32 z><u32 block_id>`
+These responses are sent by a RSC server to a RSC client in response to a request.
 
-ObserveBlockResp: `<u8 0><i32 x><i32 y><i32 z><u32 block_id>`
+| Response type | Packet format
+| --- | --- |
+| GetBlockResp | ``<u8 0><i32 x><i32 y><i32 z><u32 block_id>`` | 
+| ObserveBlockResp | `<u8 1><i32 x><i32 y><i32 z><u32 block_id>` | 
 
 
 
 ## Lua RSC client library
 
 A Lua client library for using RSC is available in the `rsc_lib.lua` file.
+
 It exports a single function, `make_rsc_client(con)`, which takes a single
 TCP connection argument and return a client handle.
 
 Available client functions:
 
- * `client.set_block(id, x,y,z)` - set block
- * `id = client.get_block(x,y,z)` - read block
- * `id = client.observe_block(x,y,z)` - wait for block change
- * `client.update_block(x,y,z)` - update (surrounding) blocks after set
- * `client.freeze()` - disable redstone ticking
- * `client.unfreeze()` - enable redstone ticking
- * `client.step(n)` - run n redstone ticks
+| Function | Description
+| --- | --- |
+| `client.set_block(id, x,y,z)` | Set block at position |
+| `id = client.get_block(x,y,z)` | Read block from position |
+| `id = client.observe_block(x,y,z)` | Wait for block change on position |
+| `client.update_block(x,y,z)` | Update (surrounding) blocks(typically after set) |
+| `client.freeze()` | Disable redstone ticking |
+| `client.unfreeze()` | Enable redstone ticking |
+| `client.step(n)` | Run n redstone ticks |
 
 
 
@@ -96,7 +105,9 @@ RSC scripts even easier.
 
 The `rsc_run.lua <address> <port> <script> <args> <...>` script
 will connect to the specified RSC server, and start to run the `script` file.
+
 If no `script` is provided, an interactive shell is provided for the user to type commands.
+
 Available functions in the script are the same as with the client library, but
 don't need to be pre-fixed by `client.`.
 
@@ -136,7 +147,7 @@ To run a simple test server, enter the `www/` directory and run the busybox http
 busybox httpd -v -f -p 8080
 ```
 
-You can now send API requests to `http://[your ip or localhost]:8080/cgi-bin/rsc_api.lua`., e.g.:
+You can now send API requests to `http://[your ip or localhost]:8080/cgi-bin/rsc_api.lua`, e.g.:
 
 ```
 curl "http://127.0.0.1:8080/cgi-bin/rsc_api.lua?command=set_block&x=0&y=0&z=0&block_id=0"
