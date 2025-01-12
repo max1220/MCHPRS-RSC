@@ -1,0 +1,14 @@
+{
+	"Lua.diagnostics.globals": [
+		"get_block",
+		"set_block",
+		"observe_block",
+		"update_block",
+		"freeze",
+		"unfreeze",
+		"step",
+	]
+}
+
+
+
