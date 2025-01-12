@@ -3,7 +3,7 @@ use bus::{Bus, BusReader};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use mchprs_blocks::{blocks::Block, BlockPos};
 use mchprs_world::World;
-use std::{io::{BufReader, BufWriter, Write}, net::{TcpListener, TcpStream}, sync::mpsc::{self, Sender}, thread};
+use std::{io::{BufReader, BufWriter, Error, Write}, net::{TcpListener, TcpStream}, sync::mpsc::{self, Sender}, thread::{self, Thread}};
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
@@ -208,17 +208,19 @@ impl Plot {
 
 	// rsc_listen chat command implementation
 	// TODO: Send chat responses instead of console messages
-	pub(super) fn rsc_listen(&mut self, bind_addr: &str) {
+	pub(super) fn rsc_listen(&mut self, bind_addr: &str) -> Result<(), Error> {
 		// check if already listening
 		if self.rsc_listener.is_some() {
 			let local_addr = self.rsc_listener.as_mut().unwrap().local_addr().unwrap();
-			warn!("RSC command failed. Already listening on: {:?}", local_addr);
-			return;
+			warn!("Already listening on: {:?}", local_addr);
+			return Err(Error::other(format!("Already listening on: {:?}", local_addr)));
 		}
+
+		info!("Listening on: {:?}", bind_addr);
 
 		// create TCPListener to accept incoming connections
 		let listener = TcpListener::bind(bind_addr).unwrap();
-		listener.set_nonblocking(true).unwrap();
+		listener.set_nonblocking(true)?;
 		self.rsc_listener = Some(listener);
 
 		// add bus to send RSCResponses from the plot thread to the handler threads
@@ -226,13 +228,16 @@ impl Plot {
 		// add channel to send RSCRequests from the handler threads to the plot thread
 		self.rsc_req_ch = Some(mpsc::channel());
 
-		info!("RSC command ok, listening on: {}", bind_addr);
+		return Ok(())
     }
 
 	// called to update the RSC connections in the plot thread
 	pub(super) fn rsc_update(&mut self, timeout: Option<Duration>) {
-		// only relevant if a listener is present
-		if self.rsc_listener.is_none() { return; }
+		if self.rsc_listener.is_none() {
+			// if no listener is present only sleep if a timeout was requested
+			if timeout.is_some() { thread::sleep(timeout.unwrap()); }
+			return;
+		}
 
 		// check if a new connections needs accepting
 		self.rsc_accept();

@@ -1,6 +1,7 @@
 use super::{database, worldedit, Plot, PlotWorld};
 use crate::player::{Gamemode, PacketSender, PlayerPos};
 use crate::plot::data::sleep_time_for_tps;
+use crate::plot::rsc;
 use crate::profile::PlayerProfile;
 use crate::server::Message;
 use mchprs_blocks::items::ItemStack;
@@ -520,8 +521,11 @@ impl Plot {
                     return false;
                 }
                 let rsc_bind_addr= args.remove(0);
-                info!("RSC Listen command: {}", rsc_bind_addr);
-                self.rsc_listen(rsc_bind_addr);
+                if let Err(e) = self.rsc_listen(rsc_bind_addr) {
+                    let err_msg = format!("Already listening: {:?}", e);
+                    self.players[player].send_error_message(&err_msg);
+                }
+                self.players[player].send_system_message(&format!("Listening on: {:?}", rsc_bind_addr));
             }
             "freeze" => {
                 warn!("freeze chat command");
