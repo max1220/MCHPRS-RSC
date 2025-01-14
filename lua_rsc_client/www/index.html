@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>RSC Web Client</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<style>
+			body, html {
+				width: 100%;
+				height: 100%;
+			}
+			body {
+				background-color: #fff;
+				color: #333;
+				font-family: sans-serif;
+			}
+			main {
+				max-width: 800px;
+				margin: 0 auto;
+			}
+			.cmd_block {
+				padding: 1em;
+				border-bottom: 1px solid #888;
+			}
+			.cmd_block label {
+				display: block;
+			}
+			.cmd_block input {
+				display: block;
+				margin: 0.5em;
+				border: 1px solid #888;
+				outline: none;
+				padding: 0.25em;
+			}
+			.cmd_block iframe {
+				width: 100%;
+				height: 3em;
+				border: 1px solid #888;
+				background-color: #fff;
+			}
+			@media (prefers-color-scheme: dark) {
+				body {
+					background-color: #000;
+					color: #eee;
+				}
+				.cmd_block input {
+					background-color: #181818;
+					color: #eee;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<h1>RSC Web Client</h1>
+			<p>
+				This page serves an an example for the `rsc_api.lua` CGI script.
+			</p>
+			<p>
+				You can use the controls below to send any RSC command.
+			</p>
+			<div class="cmd_block">
+				<h3>Get block</h3>
+				<form method="POST" action="/cgi-bin/rsc_api.lua" target="get_block_resp" enctype="application/x-www-form-urlencoded">
+					<input type="hidden" name="command" value="get_block">
+					<label>X: <input type="number" name="x" value="0"></label>
+					<label>Y: <input type="number" name="y" value="0"></label>
+					<label>Z: <input type="number" name="z" value="0"></label>
+					<input type="submit">
+				</form>
+				<p>Response:</p>
+				<iframe name="get_block_resp"></iframe>
+			</div>
+			<div class="cmd_block">
+				<h3>Set block</h3>
+				<form method="POST" action="/cgi-bin/rsc_api.lua" target="set_block_resp" enctype="application/x-www-form-urlencoded">
+					<input type="hidden" name="command" value="set_block">
+					<label>X: <input type="number" name="x" value="0"></label>
+					<label>Y: <input type="number" name="y" value="0"></label>
+					<label>Z: <input type="number" name="z" value="0"></label>
+					<label>Block ID: <input type="number" name="block_id" value="0"></label>
+					<input type="submit">
+				</form>
+				<p>Response:</p>
+				<iframe name="set_block_resp"></iframe>
+			</div>
+			<div class="cmd_block">
+				<h3>Observe block change</h3>
+				<form method="POST" action="/cgi-bin/rsc_api.lua" target="observe_block_resp" enctype="application/x-www-form-urlencoded">
+					<input type="hidden" name="command" value="observe_block">
+					<label>X: <input type="number" name="x" value="0"></label>
+					<label>Y: <input type="number" name="y" value="0"></label>
+					<label>Z: <input type="number" name="z" value="0"></label>
+					<input type="submit">
+				</form>
+				<p>Response:</p>
+				<iframe name="observe_block_resp"></iframe>
+			</div>
+			<div class="cmd_block">
+				<h3>Update block</h3>
+				<form method="POST" action="/cgi-bin/rsc_api.lua" target="update_block_resp" enctype="application/x-www-form-urlencoded">
+					<input type="hidden" name="command" value="update_block">
+					<label>X: <input type="number" name="x" value="0"></label>
+					<label>Y: <input type="number" name="y" value="0"></label>
+					<label>Z: <input type="number" name="z" value="0"></label>
+					<input type="submit">
+				</form>
+				<p>Response:</p>
+				<iframe name="update_block_resp"></iframe>
+			</div>
+			<div class="cmd_block">
+				<h3>Freeze</h3>
+				<form method="POST" action="/cgi-bin/rsc_api.lua" target="freeze_resp" enctype="application/x-www-form-urlencoded">
+					<input type="hidden" name="command" value="freeze">
+					<input type="submit">
+				</form>
+				<p>Response:</p>
+				<iframe name="freeze_resp"></iframe>
+			</div>
+			<div class="cmd_block">
+				<h3>Unfreeze</h3>
+				<form method="POST" action="/cgi-bin/rsc_api.lua" target="unfreeze_resp" enctype="application/x-www-form-urlencoded">
+					<input type="hidden" name="command" value="unfreeze">
+					<input type="submit">
+				</form>
+				<p>Response:</p>
+				<iframe name="unfreeze_resp"></iframe>
+			</div>
+			<div class="cmd_block">
+				<h3>Step</h3>
+				<form method="POST" action="/cgi-bin/rsc_api.lua" target="step_resp" eenctype="application/x-www-form-urlencoded">
+					<input type="hidden" name="command" value="step">
+					<label>N: <input type="number" name="n" value="1"></label>
+					<input type="submit">
+				</form>
+				<p>Response:</p>
+				<iframe name="step_resp"></iframe>
+			</div>
+		</main>
+	</body>
+</html>
+
+
