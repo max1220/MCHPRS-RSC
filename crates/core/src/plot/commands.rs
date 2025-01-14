@@ -528,30 +528,30 @@ impl Plot {
                 self.players[player].send_system_message(&format!("Listening on: {:?}", rsc_bind_addr));
             }
             "freeze" => {
-                warn!("freeze chat command");
                 self.disable_ticking = true;
+                self.players[player].send_system_message("Game is frozen!");
             },
             "unfreeze" => {
-                warn!("unfreeze chat command");
                 self.disable_ticking = false;
+                self.players[player].send_system_message("Game is unfrozen!");
             },
             "binfo" | "block_info" => {
-                warn!("block_info chat command");
                 let mut pos = self.players[player].pos.block_pos();
                 pos.y -= 1;
                 let block = self.world.get_block(pos);
                 self.players[player].send_chat_message(&TextComponent::from_legacy_text(
-                    &format!("&6Position is {})", pos),
+                    &format!("&fPosition is: &3{}", pos),
                 ));
                 self.players[player].send_chat_message(&TextComponent::from_legacy_text(
-                    &format!("&aBlock({}) is {:?})", block.get_id(), block),
+                    &format!("&fBlock ID &3{}&f is: &3{:?}", block.get_id(), block),
                 ));
             },
             "pause_on_block" => {
-                warn!("pause_ob_block chat command");
                 self.pause_on_block_pos = Some(self.players[player].pos.block_pos());
                 self.pause_on_block_cur = Some(self.world.get_block(self.pause_on_block_pos.unwrap()));
-                warn!("Will pause game when block at {:?} is not {:?}.", self.pause_on_block_pos, self.pause_on_block_cur);
+                self.players[player].send_system_message(
+                    &format!("Will pause game when block at {:?} is not {:?}.", self.pause_on_block_pos, self.pause_on_block_cur)
+                );
             },
             _ => self.players[player].send_error_message("Command not found!"),
         }
@@ -581,7 +581,7 @@ pub static DECLARE_COMMANDS: Lazy<PacketEncoder> = Lazy::new(|| {
             Node {
                 flags: CommandFlags::ROOT.bits() as i8,
                 children: vec![
-                    1, 4, 5, 6, 8, 10, 11, 13, 18, 30, 34, 41, 43, 44, 45, 49, 51,
+                    1, 4, 5, 6, 8, 10, 11, 13, 18, 30, 34, 41, 43, 44, 45, 49, 51, 52,53,54,55,56
                 ],
                 redirect_node: None,
                 name: None,
@@ -1047,6 +1047,52 @@ pub static DECLARE_COMMANDS: Lazy<PacketEncoder> = Lazy::new(|| {
                 children: vec![],
                 redirect_node: Some(49),
                 name: Some("wsr"),
+                parser: None,
+                suggestions_type: None,
+            },
+
+            // 52: /rsc_listen
+            Node {
+                flags: (CommandFlags::LITERAL).bits() as i8,
+                children: vec![],
+                redirect_node: None,
+                name: Some("rsc_listen"),
+                parser: None,
+                suggestions_type: None,
+            },
+            // 53: /freeze
+            Node {
+                flags: (CommandFlags::LITERAL).bits() as i8,
+                children: vec![],
+                redirect_node: None,
+                name: Some("freeze"),
+                parser: None,
+                suggestions_type: None,
+            },
+            // 54: /unfreeze
+            Node {
+                flags: (CommandFlags::LITERAL).bits() as i8,
+                children: vec![],
+                redirect_node: None,
+                name: Some("unfreeze"),
+                parser: None,
+                suggestions_type: None,
+            },
+            // 55: /binfo
+            Node {
+                flags: (CommandFlags::LITERAL).bits() as i8,
+                children: vec![],
+                redirect_node: None,
+                name: Some("binfo"),
+                parser: None,
+                suggestions_type: None,
+            },
+            // 56: /pause_on_block
+            Node {
+                flags: (CommandFlags::LITERAL).bits() as i8,
+                children: vec![],
+                redirect_node: None,
+                name: Some("pause_on_block"),
                 parser: None,
                 suggestions_type: None,
             },
