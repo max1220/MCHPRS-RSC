@@ -27,8 +27,8 @@ end
 
 -- assert that uses err_exit
 local function _assert(test, ...)
-	if test then return test, ... end
-	err_exit(...)
+	if (test == nil) or (test == false) then err_exit(...) end
+	return test, ...
 end
 
 -- reply with JSON response
@@ -36,7 +36,6 @@ local function json_resp(data)
 	print("Content-type: application/json")
 	print()
 	print(json.encode(data))
-	os.exit(0)
 end
 
 -- parse a query string from QUERY_STRING env var(GET) or stdin(POST)
@@ -44,8 +43,8 @@ local function parse_query(query_str)
 	local query_args = {}
 	local function hex_to_char(hex_ch) return string.char(tonumber(hex_ch, 16)) end
 	for key,val in query_str:gmatch("([^&=?]-)=([^&=?]+)") do
-		key = key:gsub("%%(%x%x)", hex_to_char)
-		val = val:gsub("%%(%x%x)", hex_to_char)
+		key = key:gsub("%%(%x%x)", hex_to_char):gsub("%+", " ")
+		val = val:gsub("%%(%x%x)", hex_to_char):gsub("%+", " ")
 		query_args[key] = val
 	end
 	return query_args
@@ -71,28 +70,28 @@ local client = rsc_lib.make_rsc_client(tcp)
 
 -- parse the command and run it
 if query_args.command == "set_block" then
-	local block_id = _assert(tonumber(query_args.block_id), "missing block_id")
-	local x = _assert(tonumber(query_args.x), "missing x")
-	local y = _assert(tonumber(query_args.y), "missing y")
-	local z = _assert(tonumber(query_args.z), "missing z")
+	local block_id = _assert(tonumber(query_args.block_id), "missing/invalid block_id")
+	local x = _assert(tonumber(query_args.x), "missing/invalid x")
+	local y = _assert(tonumber(query_args.y), "missing/invalid y")
+	local z = _assert(tonumber(query_args.z), "missing/invalid z")
 	client.set_block(block_id, x, y, z)
 	json_resp({ command=query_args.command, status="ok" })
 elseif query_args.command == "get_block" then
-	local x = _assert(tonumber(query_args.x), "missing x")
-	local y = _assert(tonumber(query_args.y), "missing y")
-	local z = _assert(tonumber(query_args.z), "missing z")
+	local x = _assert(tonumber(query_args.x), "missing/invalid x")
+	local y = _assert(tonumber(query_args.y), "missing/invalid y")
+	local z = _assert(tonumber(query_args.z), "missing/invalid z")
 	local block_id = client.get_block(x, y, z)
 	json_resp({ command=query_args.command, status="ok", block_id=block_id })
 elseif query_args.command == "observe_block" then
-	local x = _assert(tonumber(query_args.x), "missing x")
-	local y = _assert(tonumber(query_args.y), "missing y")
-	local z = _assert(tonumber(query_args.z), "missing z")
+	local x = _assert(tonumber(query_args.x), "missing/invalid x")
+	local y = _assert(tonumber(query_args.y), "missing/invalid y")
+	local z = _assert(tonumber(query_args.z), "missing/invalid z")
 	local block_id = client.observe_block(x, y, z)
 	json_resp({ command=query_args.command, status="ok", block_id=block_id })
 elseif query_args.command == "update_block" then
-	local x = _assert(tonumber(query_args.x), "missing x")
-	local y = _assert(tonumber(query_args.y), "missing y")
-	local z = _assert(tonumber(query_args.z), "missing z")
+	local x = _assert(tonumber(query_args.x), "missing/invalid x")
+	local y = _assert(tonumber(query_args.y), "missing/invalid y")
+	local z = _assert(tonumber(query_args.z), "missing/invalid z")
 	client.update_block(x, y, z)
 	json_resp({ command=query_args.command, status="ok",})
 elseif query_args.command == "freeze" then
@@ -102,9 +101,57 @@ elseif query_args.command == "unfreeze" then
 	client.unfreeze()
 	json_resp({ command=query_args.command, status="ok",})
 elseif query_args.command == "step" then
-	local n = _assert(tonumber(query_args.n), "missing n")
+	local n = _assert(tonumber(query_args.n), "missing/invalid n")
 	client.step(n)
 	json_resp({ command=query_args.command, status="ok",})
+elseif query_args.command == "get_block_range" then
+	local x_min = _assert(tonumber(query_args.x_min), "missing/invalid x_min")
+	local y_min = _assert(tonumber(query_args.y_min), "missing/invalid y_min")
+	local z_min = _assert(tonumber(query_args.z_min), "missing/invalid z_min")
+	local x_max = _assert(tonumber(query_args.x_max), "missing/invalid x_max")
+	local y_max = _assert(tonumber(query_args.y_max), "missing/invalid y_max")
+	local z_max = _assert(tonumber(query_args.z_max), "missing/invalid z_max")
+	local w,h,d = x_max-x_min, y_max-y_min, z_max-z_min
+	_assert((w>0) and (h>0) and (d>0), "Invalid block range!")
+	local blocks = client.get_block_range(x_min,y_min,z_min, x_max,y_max,z_max)
+	json_resp({ command=query_args.command, status="ok", blocks=blocks})
+elseif query_args.command == "set_block_range" then
+	local x_min = _assert(tonumber(query_args.x_min), "missing/invalid x_min")
+	local y_min = _assert(tonumber(query_args.y_min), "missing/invalid y_min")
+	local z_min = _assert(tonumber(query_args.z_min), "missing/invalid z_min")
+	local x_max = _assert(tonumber(query_args.x_max), "missing/invalid x_max")
+	local y_max = _assert(tonumber(query_args.y_max), "missing/invalid y_max")
+	local z_max = _assert(tonumber(query_args.z_max), "missing/invalid z_max")
+	local w,h,d = x_max-x_min, y_max-y_min, z_max-z_min
+	_assert((w>0) and (h>0) and (d>0), "Invalid block range!")
+	local blocks = {}
+	_assert(query_args.blocks, "missing blocks!")
+	for id in (query_args.blocks..","):gmatch("(.-),") do
+		local id = _assert(tonumber(id), "Block ID not a number!")
+		io.stderr:write(("YY yxcyxc block is: %d at %d\n"):format(id, #blocks))
+		table.insert(blocks, id)
+	end
+	_assert(#blocks == w*h*d, ("Dimensions and #blocks received don't match! Got %d blocks, expected %d"):format(#blocks, w*h*d))
+	client.set_block_range(x_min,y_min,z_min, x_max,y_max,z_max, blocks)
+	json_resp({ command=query_args.command, status="ok",})
+elseif query_args.command == "update_block_range" then
+	local x_min = _assert(tonumber(query_args.x_min), "missing/invalid x_min")
+	local y_min = _assert(tonumber(query_args.y_min), "missing/invalid y_min")
+	local z_min = _assert(tonumber(query_args.z_min), "missing/invalid z_min")
+	local x_max = _assert(tonumber(query_args.x_max), "missing/invalid x_max")
+	local y_max = _assert(tonumber(query_args.y_max), "missing/invalid y_max")
+	local z_max = _assert(tonumber(query_args.z_max), "missing/invalid z_max")
+	local w,h,d = x_max-x_min, y_max-y_min, z_max-z_min
+	_assert((w>0) and (h>0) and (d>0), "Invalid block range!")
+	client.update_block_range(x_min,y_min,z_min, x_max,y_max,z_max)
+	json_resp({ command=query_args.command, status="ok"})
+elseif query_args.command == "send_chat_message" then
+	local msg = _assert(query_args.msg, "missing chat message")
+	client.send_chat_message(msg)
+	json_resp({ command=query_args.command, status="ok",})
 else
-	err_exit("Unknown command!")
+	err_exit("missing/invalid command!")
 end
+
+-- gracefully shutdown connection
+client.disconnect()

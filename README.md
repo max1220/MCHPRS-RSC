@@ -18,7 +18,16 @@ to a display in Minecraft.
 The `rsc_api.lua` CGI script wraps the RSC API for the web, enabling extensions
 to be written in JavaScript for the browser.
 
-This fork is *not in any way* officially associated with the official MCHPRS project.
+> [!NOTE]
+> This fork is *not in any way* officially associated with the official MCHPRS project.
+
+> [!WARNING]
+> Currently there are no permission checks on being able to listen to an arbitrary port!
+> In it's current state it might not be suitable for public hosting.
+
+> [!WARNING]
+> Assume access to an RSC connection means full access to a MCHPRS plot!
+> There is no authentication at the moment!
 
 
 
@@ -30,6 +39,7 @@ All these commands apply to the current plot.
 | Chat command | Description | 
 | --- | --- |
 | `rsc_listen <bind address>` | Start the TCP listener thread and binds to the specified address:port |
+| `rsc_chat` | Send a chat message that can be read by RSC clients |
 | `freeze` | Freeze redstone ticks |
 | `unfreeze` | Unfreeze redstone ticks |
 | `binfo` | Show info about the block under the players feet |
@@ -50,30 +60,39 @@ two of which(GetBlock and ObserveBlock) send a reply back.
 The first byte in a package is always a packet ID.
 The other data types used in packets are signed and unsigned 32-bit little-endian integers.
 
+> [!NOTE]
+> A request is not always immediately followed by a response for this particular request.
+> For example, a ChatMessageResp can arrive while waiting for a GetBlockResp!
 
 ### Requests
 
 These requests can be sent to a RSC server from a RSC client.
 
-| Request type | Packet format | Server response
-| --- | --- | --- |
-| GetBlock | `<u8 0><i32 x><i32 y><i32 z>` | GetBlockResp |
-| SetBlock | `<u8 1><i32 x><i32 y><i32 z><u32 block_id>` |  |
-| ObserveBlock | `<u8 2><i32 x><i32 y><i32 z>` | ObserveBlockResp |
-| UpdateBlock | `<u8 3><i32 x><i32 y><i32 z>` |  |
-| Freeze | `<u8 4>` |  |
-| Unfreeze | `<u8 5>` |  |
-| Step | `<u8 6><i32 n>` |  |
-
+| Request type | Packet format | Server response | Additional details
+| --- | --- | --- | --- |
+| GetBlock | `<u8 0><i32 x><i32 y><i32 z>` | GetBlockResp |  |
+| SetBlock | `<u8 1><i32 x><i32 y><i32 z><u32 block_id>` |  |  |
+| ObserveBlock | `<u8 2><i32 x><i32 y><i32 z>` | ObserveBlockResp |  |
+| UpdateBlock | `<u8 3><i32 x><i32 y><i32 z>` |  |  |
+| Freeze | `<u8 4>` |  |  |
+| Unfreeze | `<u8 5>` |  |  |
+| Step | `<u8 6><i32 n>` |  |  |
+| GetBlockRange | `<u8 7><i32 x_min><i32 y_min><i32 z_min><i32 x_max><i32 y_max><i32 z_max>` | GetBlockRangeResp |  |
+| SetBlockRange | `<u8 8><i32 x_min><i32 y_min><i32 z_min><i32 x_max><i32 y_max><i32 z_max><u32 blockid><...>` |  | multiple block ids are in xyz-order |
+| UpdateBlockRange | `<u8 9><i32 x_min><i32 y_min><i32 z_min><i32 x_max><i32 y_max><i32 z_max>` |  |  |
+| SendChatMessage | `<u8 10><u8 ch><...>` |  | Zero-terminated |
+| Exit | `<u8 11>` |  |  |
 
 ### Responses
 
 These responses are sent by a RSC server to a RSC client in response to a request.
 
-| Response type | Packet format
-| --- | --- |
-| GetBlockResp | ``<u8 0><i32 x><i32 y><i32 z><u32 block_id>`` | 
-| ObserveBlockResp | `<u8 1><i32 x><i32 y><i32 z><u32 block_id>` | 
+| Response type | Packet format | Additional details
+| --- | --- | --- |
+| GetBlockResp | ``<u8 0><i32 x><i32 y><i32 z><u32 block_id>`` |  |
+| ObserveBlockResp | `<u8 1><i32 x><i32 y><i32 z><u32 block_id>` | block_id is new block |
+| GetBlockRangeResp | `<u8 1><i32 x_min><i32 y_min><i32 z_min><i32 x_max><i32 y_max><i32 z_max><u32 block_id><...>` | multiple block ids are in xyz-order  |
+| ChatMessageResp | `<u8 1><u8 ch><...>` | zero-terminated |
 
 
 
@@ -157,6 +176,10 @@ curl "http://127.0.0.1:8080/cgi-bin/rsc_api.lua?command=update_block&x=0&y=0&z=0
 curl "http://127.0.0.1:8080/cgi-bin/rsc_api.lua?command=freeze"
 curl "http://127.0.0.1:8080/cgi-bin/rsc_api.lua?command=unfreeze"
 curl "http://127.0.0.1:8080/cgi-bin/rsc_api.lua?command=step&n=1"
+curl "http://127.0.0.1:8080/cgi-bin/rsc_api.lua?command=get_block_range&x_min=0&y_min=0&z_min=0&x_max=0&y_max=0&z_max=0"
+curl "http://127.0.0.1:8080/cgi-bin/rsc_api.lua?command=set_block_range&x_min=0&y_min=0&z_min=0&x_max=2&y_max=2&z_max=2&blocks=0,0,0,0,0,0,0,0"
+curl "http://127.0.0.1:8080/cgi-bin/rsc_api.lua?command=update_block_range&x_min=0&y_min=0&z_min=0&x_max=0&y_max=0&z_max=0"
+curl "http://127.0.0.1:8080/cgi-bin/rsc_api.lua?command=send_chat_message&msg=hello+world"
 ```
 
 

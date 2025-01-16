@@ -10,10 +10,10 @@ local port = assert(table.remove(arg, 1), "Second command-line argument needs to
 assert(tcp:connect(addr, port), ("Can't connect to: %q with port: %d"):format(tostring(addr), tostring(port)))
 
 -- create a RSC client
-rsc_client = rsc_lib.make_rsc_client(tcp)
+client = rsc_lib.make_rsc_client(tcp)
 
 -- export functions to global namespace()
-for k,v in pairs(rsc_client) do _G[k] = v end
+for k,v in pairs(client) do _G[k] = v end
 
 -- either run a script(if provided), or drop to an interactive debug shell
 local script_path = table.remove(arg, 1)

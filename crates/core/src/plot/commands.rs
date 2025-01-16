@@ -1,7 +1,7 @@
 use super::{database, worldedit, Plot, PlotWorld};
 use crate::player::{Gamemode, PacketSender, PlayerPos};
 use crate::plot::data::sleep_time_for_tps;
-use crate::plot::rsc;
+use crate::plot::rsc::RSCResponse;
 use crate::profile::PlayerProfile;
 use crate::server::Message;
 use mchprs_blocks::items::ItemStack;
@@ -522,11 +522,22 @@ impl Plot {
                 }
                 let rsc_bind_addr= args.remove(0);
                 if let Err(e) = self.rsc_listen(rsc_bind_addr) {
-                    let err_msg = format!("Already listening: {:?}", e);
+                    let err_msg = format!("Error: {}", e);
                     self.players[player].send_error_message(&err_msg);
+                } else {
+                    self.players[player].send_system_message(&format!("Listening on: {:?}", rsc_bind_addr));
                 }
-                self.players[player].send_system_message(&format!("Listening on: {:?}", rsc_bind_addr));
             }
+            "rsc_chat" => {
+                if args.len() != 1 {
+                    self.players[player].send_error_message("Invalid number of arguments!");
+                    return false;
+                }
+                let msg= args.remove(0);
+                if self.rsc_resp_bus.is_some() {
+                    self.rsc_resp_bus.as_mut().unwrap().broadcast(RSCResponse::ChatMessageResp(msg.to_string()));
+                }
+            },
             "freeze" => {
                 self.disable_ticking = true;
                 self.players[player].send_system_message("Game is frozen!");
@@ -547,10 +558,11 @@ impl Plot {
                 ));
             },
             "pause_on_block" => {
-                self.pause_on_block_pos = Some(self.players[player].pos.block_pos());
-                self.pause_on_block_cur = Some(self.world.get_block(self.pause_on_block_pos.unwrap()));
+                let block_pos = self.players[player].pos.block_pos();
+                let block_cur = self.world.get_block(block_pos);
+                self.pause_observers.push((block_pos, block_cur, true));
                 self.players[player].send_system_message(
-                    &format!("Will pause game when block at {:?} is not {:?}.", self.pause_on_block_pos, self.pause_on_block_cur)
+                    &format!("Will pause game when block at {:?} is changed from {:?}.", block_pos, block_cur)
                 );
             },
             _ => self.players[player].send_error_message("Command not found!"),
@@ -581,7 +593,7 @@ pub static DECLARE_COMMANDS: Lazy<PacketEncoder> = Lazy::new(|| {
             Node {
                 flags: CommandFlags::ROOT.bits() as i8,
                 children: vec![
-                    1, 4, 5, 6, 8, 10, 11, 13, 18, 30, 34, 41, 43, 44, 45, 49, 51, 52,53,54,55,56
+                    1, 4, 5, 6, 8, 10, 11, 13, 18, 30, 34, 41, 43, 44, 45, 49, 51, 52,53,54,55,56,57
                 ],
                 redirect_node: None,
                 name: None,
@@ -1093,6 +1105,15 @@ pub static DECLARE_COMMANDS: Lazy<PacketEncoder> = Lazy::new(|| {
                 children: vec![],
                 redirect_node: None,
                 name: Some("pause_on_block"),
+                parser: None,
+                suggestions_type: None,
+            },
+            // 57: /rsc_chat
+            Node {
+                flags: (CommandFlags::LITERAL).bits() as i8,
+                children: vec![],
+                redirect_node: None,
+                name: Some("rsc_chat"),
                 parser: None,
                 suggestions_type: None,
             },

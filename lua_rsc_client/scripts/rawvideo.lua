@@ -1,8 +1,8 @@
 -- this RSC script implements a very simple rawvideo-to-minecraft bridge
 
 -- input resolution
-local input_width = 80
-local input_height = 60
+local input_width = assert(tonumber(arg[1]))
+local input_height = assert(tonumber(arg[2]))
 
 -- required block ids
 local wool_black = 2062
@@ -12,19 +12,20 @@ local wool_white = 2047
 
 while true do
 	local pixels = io.stdin:read(input_width*input_height)
-	for y=1, input_height-1 do
-		for x=1, input_width-1 do
-			local b = pixels:byte(y*input_width+x)
+	local blocks = {}
+	for y=input_height-1,0,-1 do
+		for x=0, input_width-1 do
+			local b = pixels:byte(y*input_width+x+1)
 			if b > 192 then
-				set_block(wool_white, x,100-y,0)
+				table.insert(blocks, wool_white)
 			elseif b > 128 then
-				set_block(wool_light_gray, x,100-y,0)
+				table.insert(blocks, wool_light_gray)
 			elseif b > 64 then
-				set_block(wool_gray, x,100-y,0)
+				table.insert(blocks, wool_gray)
 			else
-				set_block(wool_black, x,100-y,0)
+				table.insert(blocks, wool_black)
 			end
-			--update_block(x,y,0)
 		end
 	end
+	set_block_range(0,30,0, input_width, 30+input_height, 1, blocks)
 end

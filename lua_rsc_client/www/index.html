@@ -2,7 +2,7 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8">
-		<title>RSC Web Client</title>
+		<title>RSC Web Client API example</title>
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<style>
 			body, html {
@@ -52,7 +52,7 @@
 	</head>
 	<body>
 		<main>
-			<h1>RSC Web Client</h1>
+			<h1>RSC Web Client API example</h1>
 			<p>
 				This page serves an an example for the `rsc_api.lua` CGI script.
 			</p>
@@ -135,6 +135,62 @@
 				</form>
 				<p>Response:</p>
 				<iframe name="step_resp"></iframe>
+			</div>
+			<div class="cmd_block">
+				<h3>get_block_range</h3>
+				<form method="POST" action="/cgi-bin/rsc_api.lua" target="get_block_range_resp" eenctype="application/x-www-form-urlencoded">
+					<input type="hidden" name="command" value="get_block_range">
+					<label>x_min: <input type="number" name="x_min" value="0"></label>
+					<label>y_min: <input type="number" name="y_min" value="0"></label>
+					<label>z_min: <input type="number" name="z_min" value="0"></label>
+					<label>x_max: <input type="number" name="x_max" value="2"></label>
+					<label>y_max: <input type="number" name="y_max" value="2"></label>
+					<label>z_max: <input type="number" name="z_max" value="2"></label>
+					<input type="submit">
+				</form>
+				<p>Response:</p>
+				<iframe name="get_block_range_resp"></iframe>
+			</div>
+			<div class="cmd_block">
+				<h3>set_block_range</h3>
+				<form method="POST" action="/cgi-bin/rsc_api.lua" target="set_block_range_resp" eenctype="application/x-www-form-urlencoded">
+					<input type="hidden" name="command" value="set_block_range">
+					<label>x_min: <input type="number" name="x_min" value="0"></label>
+					<label>y_min: <input type="number" name="y_min" value="0"></label>
+					<label>z_min: <input type="number" name="z_min" value="0"></label>
+					<label>x_max: <input type="number" name="x_max" value="2"></label>
+					<label>y_max: <input type="number" name="y_max" value="2"></label>
+					<label>z_max: <input type="number" name="z_max" value="2"></label>
+					<label>blocks: <input type="text" name="blocks" value="2047,0,0,0,0,0,0,0"></label>
+					<input type="submit">
+				</form>
+				<p>Response:</p>
+				<iframe name="set_block_range_resp"></iframe>
+			</div>
+			<div class="cmd_block">
+				<h3>update_block_range</h3>
+				<form method="POST" action="/cgi-bin/rsc_api.lua" target="update_block_range_resp" eenctype="application/x-www-form-urlencoded">
+					<input type="hidden" name="command" value="update_block_range">
+					<label>x_min: <input type="number" name="x_min" value="0"></label>
+					<label>y_min: <input type="number" name="y_min" value="0"></label>
+					<label>z_min: <input type="number" name="z_min" value="0"></label>
+					<label>x_max: <input type="number" name="x_max" value="1"></label>
+					<label>y_max: <input type="number" name="y_max" value="1"></label>
+					<label>z_max: <input type="number" name="z_max" value="1"></label>
+					<input type="submit">
+				</form>
+				<p>Response:</p>
+				<iframe name="update_block_range_resp"></iframe>
+			</div>
+			<div class="cmd_block">
+				<h3>send_chat_message</h3>
+				<form method="POST" action="/cgi-bin/rsc_api.lua" target="send_chat_message_resp" eenctype="application/x-www-form-urlencoded">
+					<input type="hidden" name="command" value="send_chat_message">
+					<label>msg: <input type="text" name="msg" value="Hello World!"></label>
+					<input type="submit">
+				</form>
+				<p>Response:</p>
+				<iframe name="send_chat_message_resp"></iframe>
 			</div>
 		</main>
 	</body>

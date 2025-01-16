@@ -7,6 +7,14 @@
 		"freeze",
 		"unfreeze",
 		"step",
+		"get_block_range",
+		"set_block_range",
+		"update_block_range",
+		"send_chat_message",
+		"disconnect",
+		"receive_response",
+		"wait_for_response",
+		"con"
 	]
 }
 

@@ -99,12 +99,14 @@ pub struct Plot {
     async_rt: Runtime,
     scoreboard: Scoreboard,
 
+    // if the plot should tick redstone(for pausing/unpausing from RSC or command)
     disable_ticking: bool,
-    pause_on_block_pos: Option<BlockPos>,
-    pause_on_block_cur: Option<Block>,
-    pause_on_block_repeat: bool,
 
-    rsc_waiting_for_pause: bool,
+    // list of pause observers. If the block is different than block after tick, the game gets paused.
+    // if the flag is set, the RSC connections will be notified when the game gets paused.
+    pause_observers: Vec<(BlockPos, Block, bool)>,
+
+    // RSC communication
     rsc_listener: Option<TcpListener>,
     rsc_resp_bus: Option<Bus<RSCResponse>>,
     rsc_req_ch: Option<(Sender<RSCRequest>, Receiver<RSCRequest>)>,
@@ -289,6 +291,7 @@ impl Plot {
         self.timings.tick();
         if self.redpiler.is_active() {
             self.redpiler.tick();
+            self.rsc_pause_observer_handle();
             return;
         }
 
@@ -303,26 +306,7 @@ impl Plot {
             mchprs_redstone::tick(self.world.get_block(entry.pos), &mut self.world, entry.pos);
         }
 
-        // observe the block position
-        if self.pause_on_block_pos.is_some() {
-            let new = self.world.get_block(self.pause_on_block_pos.unwrap());
-            if new != self.pause_on_block_cur.unwrap() {
-                debug!("pause_on_block change observed!");
-                if let Some(bus) = self.rsc_resp_bus.as_mut() {
-                    if self.rsc_waiting_for_pause {
-                        debug!("RSC is waiting for response, broadcasting ObserveBlockResp");
-                        let p = self.pause_on_block_pos.unwrap();
-                        bus.broadcast(RSCResponse::ObserveBlockResp(p.x, p.y, p.z, new.get_id()));
-                        self.rsc_waiting_for_pause = false
-                    }
-                }
-                if !self.pause_on_block_repeat {
-                    self.pause_on_block_pos = None;
-                    self.pause_on_block_cur = None;
-                }
-                self.disable_ticking = true;
-            }
-        }
+        self.rsc_pause_observer_handle();
     }
 
     /// Send a block change to all connected players
@@ -1186,11 +1170,8 @@ impl Plot {
             async_rt: Plot::create_async_rt(),
             scoreboard: Default::default(),
             world,
-            pause_on_block_cur: None,
-            pause_on_block_pos: None,
-            pause_on_block_repeat: false,
             disable_ticking: false,
-            rsc_waiting_for_pause: false,
+            pause_observers: vec![],
             rsc_listener: None,
             rsc_resp_bus: None,
             rsc_req_ch: None,
@@ -1247,8 +1228,8 @@ impl Plot {
         while self.running {
             // Fast path, for super high RTPS
             if self.sleep_time <= Duration::from_millis(5) && !self.players.is_empty() {
-                self.rsc_update(None);
                 self.update();
+                self.rsc_update(None);
                 if self.tps != Tps::Unlimited {
                     thread::yield_now();
                 }
