@@ -529,11 +529,11 @@ impl Plot {
                 }
             }
             "rsc_chat" => {
-                if args.len() != 1 {
+                if args.len() < 1 {
                     self.players[player].send_error_message("Invalid number of arguments!");
                     return false;
                 }
-                let msg= args.remove(0);
+                let msg = args.join(" ");
                 if self.rsc_resp_bus.is_some() {
                     self.rsc_resp_bus.as_mut().unwrap().broadcast(RSCResponse::ChatMessageResp(msg.to_string()));
                 }
