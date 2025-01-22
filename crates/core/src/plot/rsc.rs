@@ -21,6 +21,7 @@ pub enum RSCRequest {
 	SetBlockRange(i32, i32, i32, i32, i32, i32, Vec<u32>),
 	UpdateBlockRange(i32, i32, i32, i32, i32, i32),
 	SendChatMessage(Vec<u8>),
+	GetPlayers(),
 }
 #[derive(Debug, Clone)]
 pub enum RSCResponse {
@@ -28,6 +29,7 @@ pub enum RSCResponse {
 	ObserveBlockResp(i32, i32, i32, u32),
 	GetBlockRangeResp(i32, i32, i32, i32, i32, i32, Vec<u32>),
 	ChatMessageResp(String),
+	GetPlayersResp(Vec<(u128, String, crate::player::PlayerPos, f32, f32, bool, bool, bool, bool, BlockPos, BlockPos)>),
 }
 
 impl Plot {
@@ -90,6 +92,33 @@ impl Plot {
 					writer.flush()?;
 					debug!("[RSC responder thread] ChatMessageResp forward done!");
 				},
+				Ok(RSCResponse::GetPlayersResp(players)) => {
+					debug!("[RSC responder thread] forwarding GetPlayersResp...");
+					writer.write_i8(4)?;
+					for (uuid, username, pos, yaw, pitch, flying, sprinting, crouching, on_ground, pos1, pos2) in players.iter() {
+						writer.write_u128::<LittleEndian>(*uuid)?;
+						writer.write_f64::<LittleEndian>(pos.x)?;
+						writer.write_f64::<LittleEndian>(pos.y)?;
+						writer.write_f64::<LittleEndian>(pos.z)?;
+						writer.write_f32::<LittleEndian>(*yaw)?;
+						writer.write_f32::<LittleEndian>(*pitch)?;
+						writer.write_u8(*flying as u8)?;
+						writer.write_u8(*sprinting as u8)?;
+						writer.write_u8(*crouching as u8)?;
+						writer.write_u8(*on_ground as u8)?;
+						writer.write_i32::<LittleEndian>(pos1.x)?;
+						writer.write_i32::<LittleEndian>(pos1.y)?;
+						writer.write_i32::<LittleEndian>(pos1.z)?;
+						writer.write_i32::<LittleEndian>(pos2.x)?;
+						writer.write_i32::<LittleEndian>(pos2.y)?;
+						writer.write_i32::<LittleEndian>(pos2.z)?;
+						for byte in username.as_bytes().iter() {
+							writer.write_u8(*byte)?;
+						}
+						writer.write_u8(0)?;
+					}
+					writer.flush()?;
+				},
 				Err(e) => {
 					return Err(Error::other(e));
 				}
@@ -113,7 +142,7 @@ impl Plot {
 		// wait for commands, and forward requests to the main thread
 		let mut reader = BufReader::new(stream.try_clone()?);
 		loop {
-			let cmd = reader.read_i8()?;
+			let cmd = reader.read_u8()?;
 			match cmd {
 				0 => {
 					// GetBlock command
@@ -220,16 +249,23 @@ impl Plot {
 					tx.send(RSCRequest::UpdateBlockRange(min_x, min_y, min_z, max_x, max_y, max_z)).unwrap();
 				},
 				10 => {
+					// send chat message
 					debug!("[RSC handle thread] got SendChatMessage RSC command");
 					let mut msg = vec![];
 					reader.read_until(0, &mut msg)?;
 					tx.send(RSCRequest::SendChatMessage(msg)).unwrap();
 				},
 				11 => {
+					// get players
+					debug!("[RSC handle thread] got GetPlayers RSC command");
+					tx.send(RSCRequest::GetPlayers()).unwrap();
+				}
+				255 => {
+					// exit
 					debug!("[RSC handle thread] got Exit RSC command");
 					stream.shutdown(std::net::Shutdown::Both)?;
 					return Ok(());
-				}
+				},
 				cmd_id => {
 					// unknown command
 					panic!("[RSC handle thread] Invalid RSC command ID: {}", cmd_id);
@@ -348,6 +384,16 @@ impl Plot {
 					debug!("[RSC plot handle] received SendChatMessage request");
 					msg.pop();
 					self.broadcast_plot_chat_message(std::str::from_utf8(&msg).unwrap());
+				},
+				RSCRequest::GetPlayers() => {
+					debug!("[RSC plot handle] received GetPlayers request");
+					let mut player_list = vec![];
+					for player in self.players.iter() {
+						let pos1 = player.first_position.or(Some(BlockPos::new(0,0,0))).unwrap();
+						let pos2 = player.second_position.or(Some(BlockPos::new(0,0,0))).unwrap();
+						player_list.push((player.uuid, player.username.clone(), player.pos, player.yaw, player.pitch, player.flying, player.sprinting, player.crouching, player.on_ground, pos1, pos2))
+					}
+					self.rsc_resp_bus.as_mut().unwrap().broadcast(RSCResponse::GetPlayersResp(player_list));
 				}
 			}
 		}
