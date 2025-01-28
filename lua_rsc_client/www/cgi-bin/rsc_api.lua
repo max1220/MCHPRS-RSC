@@ -14,7 +14,7 @@ local rsc_addr, rsc_port = "127.0.0.1", 25566
 -- Lua RSC script runner(send RSC commands to MCHPRS Minecraft server from Lua).
 local socket = require("socket")
 local json = require("cjson")
-local rsc_lib = dofile("../../rsc_lib.lua")
+local rsc_lib = dofile("../../rsc_lib.lua") -- adjust to your needs
 
 -- exit with error message
 local function err_exit(err_msg)
@@ -74,35 +74,35 @@ if query_args.command == "set_block" then
 	local x = _assert(tonumber(query_args.x), "missing/invalid x")
 	local y = _assert(tonumber(query_args.y), "missing/invalid y")
 	local z = _assert(tonumber(query_args.z), "missing/invalid z")
-	client.set_block(block_id, x, y, z)
+	client.send_request.SetBlock(block_id, x, y, z)
 	json_resp({ command=query_args.command, status="ok" })
 elseif query_args.command == "get_block" then
 	local x = _assert(tonumber(query_args.x), "missing/invalid x")
 	local y = _assert(tonumber(query_args.y), "missing/invalid y")
 	local z = _assert(tonumber(query_args.z), "missing/invalid z")
-	local block_id = client.get_block(x, y, z)
+	local block_id = select(5, client.send_request.GetBlock(x,y,z)())
 	json_resp({ command=query_args.command, status="ok", block_id=block_id })
 elseif query_args.command == "observe_block" then
 	local x = _assert(tonumber(query_args.x), "missing/invalid x")
 	local y = _assert(tonumber(query_args.y), "missing/invalid y")
 	local z = _assert(tonumber(query_args.z), "missing/invalid z")
-	local block_id = client.observe_block(x, y, z)
+	local block_id = select(5, client.send_request.ObserveBlock(x,y,z)())
 	json_resp({ command=query_args.command, status="ok", block_id=block_id })
 elseif query_args.command == "update_block" then
 	local x = _assert(tonumber(query_args.x), "missing/invalid x")
 	local y = _assert(tonumber(query_args.y), "missing/invalid y")
 	local z = _assert(tonumber(query_args.z), "missing/invalid z")
-	client.update_block(x, y, z)
+	client.send_request.UpdateBlock(x, y, z)
 	json_resp({ command=query_args.command, status="ok",})
 elseif query_args.command == "freeze" then
-	client.freeze()
+	client.send_request.Freeze()
 	json_resp({ command=query_args.command, status="ok",})
 elseif query_args.command == "unfreeze" then
-	client.unfreeze()
+	client.send_request.Unfreeze()
 	json_resp({ command=query_args.command, status="ok",})
 elseif query_args.command == "step" then
 	local n = _assert(tonumber(query_args.n), "missing/invalid n")
-	client.step(n)
+	client.send_request.Step(n)
 	json_resp({ command=query_args.command, status="ok",})
 elseif query_args.command == "get_block_range" then
 	local x_min = _assert(tonumber(query_args.x_min), "missing/invalid x_min")
@@ -113,7 +113,7 @@ elseif query_args.command == "get_block_range" then
 	local z_max = _assert(tonumber(query_args.z_max), "missing/invalid z_max")
 	local w,h,d = x_max-x_min, y_max-y_min, z_max-z_min
 	_assert((w>0) and (h>0) and (d>0), "Invalid block range!")
-	local blocks = client.get_block_range(x_min,y_min,z_min, x_max,y_max,z_max)
+	local blocks = client.send_request.GetBlockRange(x_min,y_min,z_min, x_max,y_max,z_max)()
 	json_resp({ command=query_args.command, status="ok", blocks=blocks})
 elseif query_args.command == "set_block_range" then
 	local x_min = _assert(tonumber(query_args.x_min), "missing/invalid x_min")
@@ -127,12 +127,10 @@ elseif query_args.command == "set_block_range" then
 	local blocks = {}
 	_assert(query_args.blocks, "missing blocks!")
 	for id in (query_args.blocks..","):gmatch("(.-),") do
-		local id = _assert(tonumber(id), "Block ID not a number!")
-		io.stderr:write(("YY yxcyxc block is: %d at %d\n"):format(id, #blocks))
-		table.insert(blocks, id)
+		table.insert(blocks, _assert(tonumber(id), "Block ID not a number!"))
 	end
 	_assert(#blocks == w*h*d, ("Dimensions and #blocks received don't match! Got %d blocks, expected %d"):format(#blocks, w*h*d))
-	client.set_block_range(x_min,y_min,z_min, x_max,y_max,z_max, blocks)
+	client.send_request.SetBlockRange(x_min,y_min,z_min, x_max,y_max,z_max, blocks)
 	json_resp({ command=query_args.command, status="ok",})
 elseif query_args.command == "update_block_range" then
 	local x_min = _assert(tonumber(query_args.x_min), "missing/invalid x_min")
@@ -143,12 +141,15 @@ elseif query_args.command == "update_block_range" then
 	local z_max = _assert(tonumber(query_args.z_max), "missing/invalid z_max")
 	local w,h,d = x_max-x_min, y_max-y_min, z_max-z_min
 	_assert((w>0) and (h>0) and (d>0), "Invalid block range!")
-	client.update_block_range(x_min,y_min,z_min, x_max,y_max,z_max)
+	client.send_request.UpdateBlockRange(x_min,y_min,z_min, x_max,y_max,z_max)
 	json_resp({ command=query_args.command, status="ok"})
 elseif query_args.command == "send_chat_message" then
 	local msg = _assert(query_args.msg, "missing chat message")
-	client.send_chat_message(msg)
+	client.send_request.SendChatMessage(msg)
 	json_resp({ command=query_args.command, status="ok",})
+elseif query_args.command == "get_players" then
+	local players = client.send_request.GetPlayers()()
+	json_resp({ command=query_args.command, status="ok", players=players})
 else
 	err_exit("missing/invalid command!")
 end
