@@ -81,7 +81,8 @@ These requests can be sent to a RSC server from a RSC client.
 | SetBlockRange | `<u8 8><i32 x_min><i32 y_min><i32 z_min><i32 x_max><i32 y_max><i32 z_max><u32 blockid><...>` |  | multiple block ids are in xyz-order |
 | UpdateBlockRange | `<u8 9><i32 x_min><i32 y_min><i32 z_min><i32 x_max><i32 y_max><i32 z_max>` |  |  |
 | SendChatMessage | `<u8 10><u8 ch><...>` |  | Zero-terminated |
-| Exit | `<u8 11>` |  |  |
+| GetPlayers | `<u8 11>` | GetPlayersResp | Get a list of players and player data |
+| Exit | `<u8 255>` |  |  |
 
 ### Responses
 
@@ -91,8 +92,9 @@ These responses are sent by a RSC server to a RSC client in response to a reques
 | --- | --- | --- |
 | GetBlockResp | ``<u8 0><i32 x><i32 y><i32 z><u32 block_id>`` |  |
 | ObserveBlockResp | `<u8 1><i32 x><i32 y><i32 z><u32 block_id>` | block_id is new block |
-| GetBlockRangeResp | `<u8 1><i32 x_min><i32 y_min><i32 z_min><i32 x_max><i32 y_max><i32 z_max><u32 block_id><...>` | multiple block ids are in xyz-order  |
-| ChatMessageResp | `<u8 1><u8 ch><...>` | zero-terminated |
+| GetBlockRangeResp | `<u8 2><i32 x_min><i32 y_min><i32 z_min><i32 x_max><i32 y_max><i32 z_max><u32 block_id><...>` | multiple block ids are in xyz-order  |
+| ChatMessageResp | `<u8 3><u8 ch><...>` | zero-terminated |
+| GetPlayersResp | `<u8 4><u128 uuid><f64 x><f64 y><f64 z><f32 yaw><f32 pitch><u8 flying><u8 sprinting><u8 crouching><u8 on_ground><i32 pos1_x><i32 pos1_y><i32 pos1_z><i32 pos2_x><i32 pos2_y><i32 pos2_z><u8 username><...>` | Username is zero-terminated string |
 
 
 
@@ -107,13 +109,10 @@ Available client functions:
 
 | Function | Description
 | --- | --- |
-| `client.set_block(id, x,y,z)` | Set block at position |
-| `id = client.get_block(x,y,z)` | Read block from position |
-| `id = client.observe_block(x,y,z)` | Wait for block change on position |
-| `client.update_block(x,y,z)` | Update (surrounding) blocks(typically after set) |
-| `client.freeze()` | Disable redstone ticking |
-| `client.unfreeze()` | Enable redstone ticking |
-| `client.step(n)` | Run n redstone ticks |
+| `client.send_request.*(...)` | Send the specified request. Supported requests see above. |
+| `client.receive_response()` | Return the next message from the server. First returned value is response type. Remaining return values are response arguments, see above. |
+
+| `client.wait_for_response(...)` | Wait for a specific server response specified in the arguments, ignoring and consuming all other responses. You can use `"any"` to match any value for a specified argument. |
 
 
 
@@ -127,8 +126,19 @@ will connect to the specified RSC server, and start to run the `script` file.
 
 If no `script` is provided, an interactive shell is provided for the user to type commands.
 
-Available functions in the script are the same as with the client library, but
-don't need to be pre-fixed by `client.`.
+Available functions in the script:
+
+| Function | Description
+| --- | --- |
+| `client.set_block(id, x,y,z)` | Set block at position |
+| `id = client.get_block(x,y,z)` | Read block from position |
+| `id = client.observe_block(x,y,z)` | Wait for block change on position |
+| `client.update_block(x,y,z)` | Update (surrounding) blocks(typically after set) |
+| `client.freeze()` | Disable redstone ticking |
+| `client.unfreeze()` | Enable redstone ticking |
+| `client.step(n)` | Run n redstone ticks |
+
+
 
 Some example scripts are provided in the `scripts/` directory. You can run them as: 
 
@@ -234,7 +244,7 @@ Once complete, the optimized executable will be located at `./target/release/mch
 
 MCHPRS will generate a `Config.toml` file in the current working directory when starting the server if it does not exist.
 
-The folowing options are available at the toplevel (under no header):
+The following options are available at the toplevel (under no header):
 | Field | Description | Default |
 | --- | --- |--- |
 | `bind_address` | Bind address and port | `0.0.0.0:25565` |
@@ -242,7 +252,7 @@ The folowing options are available at the toplevel (under no header):
 | `chat_format` | How to format chat message interpolating `username` and `message` with curly braces | `<{username}> {message}` |
 | `max_players` | Maximum number of simultaneous players | `99999` |
 | `view_distance` | Maximal distance (in chunks) between players and loaded chunks | `8` |
-| `whitelist` | Whether or not the whitelist (in `whitelist.json`) shoud be enabled | `false` |
+| `whitelist` | Whether or not the whitelist (in `whitelist.json`) should be enabled | `false` |
 | `schemati` | Mimic the verification and directory layout used by the Open Redstone Engineers [Schemati plugin](https://github.com/OpenRedstoneEngineers/Schemati) | `false` |
 | `block_in_hitbox` | Allow placing blocks inside of players (hitbox logic is simplified) | `true` |
 | `auto_redpiler` | Use redpiler automatically | `false` |
@@ -361,7 +371,7 @@ Placing or breaking blocks while redpiler is running will cause a reset and disa
 | Flag | Short | Description |
 | --- | --- | --- |
 | `--optimize` | `-o` | Enable redpiler optimizations. WARNING: This can, and will, break the state of your build. Use backups when using this flag. |
-| `--io-only` | `-i` | Only send blocks updates of relavent input/output blocks. This includes trapdoors, lamps, note blocks, buttons, levers, and pressure plates. Using this flag can significantly reduce lag and improve simulation speed. |
+| `--io-only` | `-i` | Only send blocks updates of relevant input/output blocks. This includes trapdoors, lamps, note blocks, buttons, levers, and pressure plates. Using this flag can significantly reduce lag and improve simulation speed. |
 | `--wire-dot-out` | `-d` | Consider wires in the dot shape as an output block for `-i`. Useful for e.g. color displays. |
 | `--update` | `-u` | Update all blocks after redpiler resets. |
 | `--export` | `-e` | Export the compile graph using a binary format. This can be useful for developing out-of-tree uses of redpiler graphs. |
