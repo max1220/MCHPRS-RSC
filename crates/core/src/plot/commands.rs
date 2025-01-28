@@ -548,7 +548,9 @@ impl Plot {
             },
             "binfo" | "block_info" => {
                 let mut pos = self.players[player].pos.block_pos();
-                pos.y -= 1;
+                if (args.len() > 0) && (args.remove(0) == "feet") {
+                    pos.y -= 1;
+                }
                 let block = self.world.get_block(pos);
                 self.players[player].send_chat_message(&TextComponent::from_legacy_text(
                     &format!("&fPosition is: &3{}", pos),
@@ -593,7 +595,7 @@ pub static DECLARE_COMMANDS: Lazy<PacketEncoder> = Lazy::new(|| {
             Node {
                 flags: CommandFlags::ROOT.bits() as i8,
                 children: vec![
-                    1, 4, 5, 6, 8, 10, 11, 13, 18, 30, 34, 41, 43, 44, 45, 49, 51, 52,53,54,55,56,57
+                    1, 4, 5, 6, 8, 10, 11, 13, 18, 30, 34, 41, 43, 44, 45, 49, 51, 52,53,54,55,56,57,58
                 ],
                 redirect_node: None,
                 name: None,
@@ -1117,6 +1119,16 @@ pub static DECLARE_COMMANDS: Lazy<PacketEncoder> = Lazy::new(|| {
                 parser: None,
                 suggestions_type: None,
             },
+            // 58: /block_info
+            Node {
+                flags: (CommandFlags::LITERAL).bits() as i8,
+                children: vec![],
+                redirect_node: None,
+                name: Some("block_info"),
+                parser: None,
+                suggestions_type: None,
+            },
+            //
         ],
         root_index: 0,
     };

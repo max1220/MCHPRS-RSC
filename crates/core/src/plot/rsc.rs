@@ -41,7 +41,7 @@ impl Plot {
 		loop {
 			match rx.recv() {
 				Ok(RSCResponse::GetBlockResp(block_x, block_y, block_z, block_id)) => {
-					debug!("[RSC responder thread] forwarding GetBlockResp...");
+					debug!("[RSC responder thread] forwarding GetBlockResp {} {} {} - {}...", block_x, block_y, block_z, block_id);
 					writer.write_i8(0)?;
 					writer.write_i32::<LittleEndian>(block_x)?;
 					writer.write_i32::<LittleEndian>(block_y)?;
@@ -51,7 +51,7 @@ impl Plot {
 					debug!("[RSC responder thread] GetBlockResp forward done!");
 				},
 				Ok(RSCResponse::ObserveBlockResp(block_x, block_y, block_z, block_id)) => {
-					debug!("[RSC responder thread] forwarding ObserveBlockResp...");
+					debug!("[RSC responder thread] forwarding ObserveBlockResp {} {} {} - {}...", block_x, block_y, block_z, block_id);
 					writer.write_i8(1)?;
 					writer.write_i32::<LittleEndian>(block_x)?;
 					writer.write_i32::<LittleEndian>(block_y)?;
@@ -61,7 +61,7 @@ impl Plot {
 					debug!("[RSC responder thread] ObserveBlockResp forward done!");
 				},
 				Ok(RSCResponse::GetBlockRangeResp(min_x, min_y, min_z, max_x, max_y, max_z, blocks)) => {
-					debug!("[RSC responder thread] forwarding GetBlockRangeResp...");
+					debug!("[RSC responder thread] forwarding GetBlockRangeResp {} {} {} - {} {} {} ...", min_x, min_y, min_z, max_x, max_y, max_z);
 					writer.write_i8(2)?;
 					writer.write_i32::<LittleEndian>(min_x)?;
 					writer.write_i32::<LittleEndian>(min_y)?;
@@ -83,7 +83,7 @@ impl Plot {
 					debug!("[RSC responder thread] GetBlockRangeResp forward done!");
 				},
 				Ok(RSCResponse::ChatMessageResp(str)) => {
-					debug!("[RSC responder thread] forwarding ChatMessageResp...");
+					debug!("[RSC responder thread] forwarding ChatMessageResp {}...", str);
 					writer.write_i8(3)?;
 					for byte in str.as_bytes().iter() {
 						writer.write_u8(*byte)?;
@@ -95,6 +95,7 @@ impl Plot {
 				Ok(RSCResponse::GetPlayersResp(players)) => {
 					debug!("[RSC responder thread] forwarding GetPlayersResp...");
 					writer.write_i8(4)?;
+					writer.write_u8(players.len().try_into().unwrap())?;
 					for (uuid, username, pos, yaw, pitch, flying, sprinting, crouching, on_ground, pos1, pos2) in players.iter() {
 						writer.write_u128::<LittleEndian>(*uuid)?;
 						writer.write_f64::<LittleEndian>(pos.x)?;
@@ -161,7 +162,7 @@ impl Plot {
 					let block_y = reader.read_i32::<LittleEndian>()?;
 					let block_z = reader.read_i32::<LittleEndian>()?;
 					let block_id = reader.read_u32::<LittleEndian>()?;
-					debug!("RSC handle thread got SetBlock RSC command: {} {} {} -> {}", block_x, block_y, block_z, block_id);
+					debug!("[RSC handle thread] got SetBlock RSC command: {} {} {} -> {}", block_x, block_y, block_z, block_id);
 					tx.send(RSCRequest::SetBlock(block_x, block_y, block_z, block_id)).unwrap();
 				}
 				2 => {
@@ -170,7 +171,7 @@ impl Plot {
 					let block_x = reader.read_i32::<LittleEndian>()?;
 					let block_y = reader.read_i32::<LittleEndian>()?;
 					let block_z = reader.read_i32::<LittleEndian>()?;
-					debug!("RSC handle thread got ObserveBlock RSC command: {} {} {}", block_x, block_y, block_z);
+					debug!("[RSC handle thread] got ObserveBlock RSC command: {} {} {}", block_x, block_y, block_z);
 					tx.send(RSCRequest::ObserveBlock(block_x, block_y, block_z)).unwrap();
 				}
 				3 => {
@@ -179,7 +180,7 @@ impl Plot {
 					let block_x = reader.read_i32::<LittleEndian>()?;
 					let block_y = reader.read_i32::<LittleEndian>()?;
 					let block_z = reader.read_i32::<LittleEndian>()?;
-					debug!("RSC handle thread got UpdateBlock RSC command: {} {} {}", block_x, block_y, block_z);
+					debug!("[RSC handle thread] got UpdateBlock RSC command: {} {} {}", block_x, block_y, block_z);
 					tx.send(RSCRequest::UpdateBlock(block_x, block_y, block_z)).unwrap();
 				}
 				4 => {
@@ -200,7 +201,7 @@ impl Plot {
 				}
 				7 => {
 					// get block range
-					debug!("[RSC handle thread] got GetBlockRange RSC command");
+					debug!("[RSC handle thread] got GetBlockRange...");
 					let mut min_x = reader.read_i32::<LittleEndian>()?;
 					let mut min_y = reader.read_i32::<LittleEndian>()?;
 					let mut min_z = reader.read_i32::<LittleEndian>()?;
@@ -210,11 +211,12 @@ impl Plot {
 					(min_x, max_x) = (cmp::min(min_x, max_x), std::cmp::max(min_x, max_x));
 					(min_y, max_y) = (cmp::min(min_y, max_y), std::cmp::max(min_y, max_y));
 					(min_z, max_z) = (cmp::min(min_z, max_z), std::cmp::max(min_z, max_z));
+					debug!("[RSC handle thread] got GetBlockRange RSC command: {} {} {} - {} {} {}", min_x, min_y, min_z, max_x, max_y, max_z);
 					tx.send(RSCRequest::GetBlockRange(min_x, min_y, min_z, max_x, max_y, max_z)).unwrap();
 				}
 				8 => {
 					// set block range
-					debug!("[RSC handle thread] got SetBlockRange RSC command");
+					debug!("[RSC handle thread] got SetBlockRange...");
 					let mut min_x = reader.read_i32::<LittleEndian>()?;
 					let mut min_y = reader.read_i32::<LittleEndian>()?;
 					let mut min_z = reader.read_i32::<LittleEndian>()?;
@@ -224,6 +226,7 @@ impl Plot {
 					(min_x, max_x) = (cmp::min(min_x, max_x), std::cmp::max(min_x, max_x));
 					(min_y, max_y) = (cmp::min(min_y, max_y), std::cmp::max(min_y, max_y));
 					(min_z, max_z) = (cmp::min(min_z, max_z), std::cmp::max(min_z, max_z));
+					debug!("[RSC handle thread] got SetBlockRange RSC command: {} {} {} - {} {} {}", min_x, min_y, min_z, max_x, max_y, max_z);
 					let mut blocks = vec![];
 					for _ in min_z..max_z {
 						for _ in min_y..max_y {
@@ -236,7 +239,7 @@ impl Plot {
 				}
 				9 => {
 					// update block range
-					debug!("[RSC handle thread] got UpdateBlockRange RSC command");
+					debug!("[RSC handle thread] got UpdateBlockRange...");
 					let mut min_x = reader.read_i32::<LittleEndian>()?;
 					let mut min_y = reader.read_i32::<LittleEndian>()?;
 					let mut min_z = reader.read_i32::<LittleEndian>()?;
@@ -246,13 +249,15 @@ impl Plot {
 					(min_x, max_x) = (cmp::min(min_x, max_x), std::cmp::max(min_x, max_x));
 					(min_y, max_y) = (cmp::min(min_y, max_y), std::cmp::max(min_y, max_y));
 					(min_z, max_z) = (cmp::min(min_z, max_z), std::cmp::max(min_z, max_z));
+					debug!("[RSC handle thread] got UpdateBlockRange RSC command: {} {} {} - {} {} {}", min_x, min_y, min_z, max_x, max_y, max_z);
 					tx.send(RSCRequest::UpdateBlockRange(min_x, min_y, min_z, max_x, max_y, max_z)).unwrap();
 				},
 				10 => {
 					// send chat message
-					debug!("[RSC handle thread] got SendChatMessage RSC command");
+					debug!("[RSC handle thread] got SendChatMessage...");
 					let mut msg = vec![];
 					reader.read_until(0, &mut msg)?;
+					debug!("[RSC handle thread] got SendChatMessage RSC command: {}", msg.len());
 					tx.send(RSCRequest::SendChatMessage(msg)).unwrap();
 				},
 				11 => {
