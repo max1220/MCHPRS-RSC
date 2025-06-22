@@ -184,7 +184,7 @@ impl Player {
         Cursor::new(md5::compute(format!("OfflinePlayer:{}", username)).0)
             .read_u128::<BigEndian>()
             .unwrap()
-            // Encode version and varient into uuid
+            // Encode version and variant into uuid
             & (!(0xC << 60) & !(0xF << 76))
             | ((0x8 << 60) | (0x3 << 76))
     }
@@ -592,7 +592,7 @@ impl Player {
         }
     }
 
-    pub fn equippment_packet(&self) -> Option<CSetEquipment> {
+    pub fn equipment_packet(&self) -> Option<CSetEquipment> {
         self.inventory[self.selected_slot as usize + 36]
             .as_ref()
             .map(|item| {

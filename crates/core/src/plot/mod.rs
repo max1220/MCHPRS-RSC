@@ -388,7 +388,7 @@ impl Plot {
         self.save();
         let spawn_player = player.spawn_packet().encode();
         let metadata = player.metadata_packet().encode();
-        let entity_equipment = player.equippment_packet();
+        let entity_equipment = player.equipment_packet();
         for other_player in &mut self.players {
             other_player.client.send_packet(&spawn_player);
             other_player.client.send_packet(&metadata);
@@ -399,7 +399,7 @@ impl Plot {
             let spawn_other_player = other_player.spawn_packet().encode();
             player.client.send_packet(&spawn_other_player);
 
-            if let Some(other_entity_equipment) = other_player.equippment_packet() {
+            if let Some(other_entity_equipment) = other_player.equipment_packet() {
                 player.client.send_packet(&other_entity_equipment.encode());
             }
 
@@ -701,7 +701,7 @@ impl Plot {
                 // We'll update the players so that they don't time out.
                 for player_idx in 0..self.players.len() {
                     if self.players[player_idx].update() {
-                        // Unforunately we can't update a players view position
+                        // Unfortunately we can't update a players view position
                         // since we don't have access to the world, but we can
                         // save the players that need updating for later.
                         players_need_updates.insert(player_idx);
@@ -733,7 +733,7 @@ impl Plot {
             self.scoreboard
                 .set_redpiler_options(&self.players, &Default::default());
 
-            // reseting redpiler could cause a large amount of block updates
+            // resetting redpiler could cause a large amount of block updates
             self.reset_timings();
         }
     }

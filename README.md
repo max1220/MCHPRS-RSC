@@ -41,7 +41,7 @@ Once complete, the optimized executable will be located at `./target/release/mch
 
 MCHPRS will generate a `Config.toml` file in the current working directory when starting the server if it does not exist.
 
-The folowing options are available at the toplevel (under no header):
+The following options are available at the toplevel (under no header):
 | Field | Description | Default |
 | --- | --- |--- |
 | `bind_address` | Bind address and port | `0.0.0.0:25565` |
@@ -49,7 +49,7 @@ The folowing options are available at the toplevel (under no header):
 | `chat_format` | How to format chat message interpolating `username` and `message` with curly braces | `<{username}> {message}` |
 | `max_players` | Maximum number of simultaneous players | `99999` |
 | `view_distance` | Maximal distance (in chunks) between players and loaded chunks | `8` |
-| `whitelist` | Whether or not the whitelist (in `whitelist.json`) shoud be enabled | `false` |
+| `whitelist` | Whether or not the whitelist (in `whitelist.json`) should be enabled | `false` |
 | `schemati` | Mimic the verification and directory layout used by the Open Redstone Engineers [Schemati plugin](https://github.com/OpenRedstoneEngineers/Schemati) | `false` |
 | `block_in_hitbox` | Allow placing blocks inside of players (hitbox logic is simplified) | `true` |
 | `auto_redpiler` | Use redpiler automatically | `false` |
@@ -168,7 +168,7 @@ Placing or breaking blocks while redpiler is running will cause a reset and disa
 | Flag | Short | Description |
 | --- | --- | --- |
 | `--optimize` | `-o` | Enable redpiler optimizations. WARNING: This can, and will, break the state of your build. Use backups when using this flag. |
-| `--io-only` | `-i` | Only send blocks updates of relavent input/output blocks. This includes trapdoors, lamps, note blocks, buttons, levers, and pressure plates. Using this flag can significantly reduce lag and improve simulation speed. |
+| `--io-only` | `-i` | Only send blocks updates of relevant input/output blocks. This includes trapdoors, lamps, note blocks, buttons, levers, and pressure plates. Using this flag can significantly reduce lag and improve simulation speed. |
 | `--wire-dot-out` | `-d` | Consider wires in the dot shape as an output block for `-i`. Useful for e.g. color displays. |
 | `--update` | `-u` | Update all blocks after redpiler resets. |
 | `--export` | `-e` | Export the compile graph using a binary format. This can be useful for developing out-of-tree uses of redpiler graphs. |
