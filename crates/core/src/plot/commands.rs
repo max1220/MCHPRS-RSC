@@ -212,6 +212,14 @@ impl Plot {
         }
     }
 
+    // Handles any command using Lua
+    fn handle_lua_command(&mut self, player: usize, command: &str, args: &[&str]) -> bool {
+        if let Some(on_chat) = &self.lua_on_chat {
+            return on_chat.call::<bool>((player, command, args)).unwrap();
+        }
+        return true;
+    }
+
     // Returns true if packets should stop being handled
     pub(super) fn handle_command(
         &mut self,
@@ -225,6 +233,11 @@ impl Plot {
             command,
             args.join(" ")
         );
+
+        // handle Lua commands
+        if self.handle_lua_command(player, command, &mut args) {
+            return false;
+        }
 
         // Handle worldedit commands
         if worldedit::execute_command(self, player, command, &mut args) {

@@ -31,12 +31,17 @@ use monitor::TimingsMonitor;
 use scoreboard::RedpilerState;
 use std::cmp::Ordering;
 use std::collections::HashSet;
+use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
 use tokio::runtime::Runtime;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
+
+use mlua::prelude::*;
+use mlua::{Function, UserData, UserDataMethods};
 
 use self::data::sleep_time_for_tps;
 use self::scoreboard::Scoreboard;
@@ -92,6 +97,16 @@ pub struct Plot {
     owner: Option<u128>,
     async_rt: Runtime,
     scoreboard: Scoreboard,
+
+    // if the plot should tick redstone(for pausing/unpausing from RSC or command)
+    disable_ticking: bool,
+
+    // the initial player connected to this plot()
+    initial_player: Option<Player>,
+
+    // Lua callback functions
+    lua_on_tick: Option<Function>,
+    lua_on_chat: Option<Function>,
 }
 
 pub struct PlotWorld {
@@ -265,6 +280,29 @@ impl World for PlotWorld {
         for player in &self.packet_senders {
             player.send_packet(&sound_effect_data);
         }
+    }
+}
+
+impl UserData for Plot {
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method_mut("_run", |_, this, ()| {
+            Self::run(this);
+            return Ok(true);
+        });
+        methods.add_method_mut("getDisableTicking", |_, this, ()| {
+            return Ok(this.disable_ticking);
+        });
+        methods.add_method_mut("setDisableTicking", |_, this, val: bool| {
+            this.disable_ticking = val;
+            return Ok(true);
+        });
+        methods.add_method_mut("getBlockID", |_, this, (x,y,z):(i32, i32, i32)| {
+            return Ok(this.world.get_block(BlockPos::new(x, y, z)).get_id());
+        });
+        methods.add_method_mut("setBlockID", |_, this, (x,y,z, id):(i32, i32, i32, u32)| {
+            this.world.set_block(BlockPos::new(x, y, z), Block::from_id(id));
+            return Ok(true);
+        });
     }
 }
 
@@ -1067,6 +1105,11 @@ impl Plot {
 
         self.remove_dc_players();
         self.remove_oob_players();
+
+        // call Lua tick handler
+        if let Some(on_tick) = &self.lua_on_tick {
+            on_tick.call::<()>(()).unwrap();
+        }
     }
 
     fn create_async_rt() -> Runtime {
@@ -1157,6 +1200,10 @@ impl Plot {
             async_rt: Plot::create_async_rt(),
             scoreboard: Default::default(),
             world,
+            disable_ticking: false,
+            initial_player: None,
+            lua_on_tick: None,
+            lua_on_chat: None,
         }
     }
 
@@ -1200,10 +1247,49 @@ impl Plot {
         self.reset_timings();
     }
 
-    fn run(&mut self, initial_player: Option<Player>) {
+    fn run_with_lua(mut self) -> Result<(), LuaError> {
+        info!("Running plot with Lua support, setting up...");
+
+        let lua_state = Lua::new();
+
+        let globals = lua_state.globals();
+        globals.set("mchprs_x_api_version", "0.0.0").unwrap();
+        globals.set("plot_x", self.world.x).unwrap();
+        globals.set("plot_z", self.world.z).unwrap();
+
+        // load lua file for all plots
+        let global_lua_path = Path::new("./global.lua");
+        if global_lua_path.exists() {
+            let mut file_data = String::new();
+            File::open(global_lua_path)?.read_to_string(&mut file_data)?;
+            lua_state.load(file_data).exec()?;
+        }
+
+        // TODO: Load Lua file for specific plot?
+        self.lua_on_tick = Some(
+            lua_state
+                .load("function() if on_tick then on_tick(PLOT) end end")
+                .eval::<Function>()?,
+        );
+        self.lua_on_chat = Some(
+            lua_state
+                .load("function(player, command, args) if on_chat then on_chat(PLOT, player, command, args) end end")
+                .eval::<Function>()?,
+        );
+
+        info!("Lua setup done, calling on_load!");
+        lua_state
+            .load("function(_plot) PLOT = _plot; if on_load then on_load(PLOT); PLOT:_run(); end end")
+            .eval::<Function>()?
+            .call::<()>(self)?;
+
+        return Ok(());
+    }
+
+    fn run(&mut self) {
         let _guard = self.async_rt.enter();
 
-        if let Some(player) = initial_player {
+        if let Some(player) = self.initial_player.take() {
             self.enter_plot(player);
         }
 
@@ -1256,7 +1342,10 @@ impl Plot {
             .name(format!("p{},{}", x, z))
             .spawn(
                 move || match Plot::load(x, z, rx, tx, priv_rx, always_running) {
-                    Ok(mut plot) => plot.run(initial_player),
+                    Ok(mut plot) => {
+                        plot.initial_player = initial_player;
+                        return plot.run_with_lua();
+                    }
                     Err((err, tx)) => {
                         if let Some(mut player) = initial_player {
                             player.send_error_message("There was an error loading that plot.");

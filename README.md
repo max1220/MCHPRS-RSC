@@ -1,3 +1,29 @@
+# MCHPRS-X fork
+
+This fork adds basic Lua scripting support for MCHPRS.
+
+
+## Lua Usage
+
+The `global.lua` script is executed, and should provide certain callback
+function to interact with the MCHPRS server.
+
+```
+function on_load(plot) end -- called when plot is ready
+
+function on_chat(plot, player, command, args) end -- return true if handled
+
+function on_tick(plot) end -- called every tick()
+
+plot:getBlockID(x,y,z) -- MCHPRS-internal integer block IDs
+plot:setBlockID(x,y,z, block_id)
+
+plot:getDisableTicking() -- "tick-freeze/unfreeze"
+plot:setDisableTicking(bool)
+```
+
+
+
 # Minecraft High-Performance Redstone Server
 
 [![Build Status](https://github.com/MCHPR/MCHPRS/actions/workflows/build.yml/badge.svg)](https://github.com/MCHPR/MCHPRS/actions/workflows/build.yml)
