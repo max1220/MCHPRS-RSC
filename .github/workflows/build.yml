@@ -13,11 +13,11 @@ jobs:
       matrix:
         target:
           - x86_64-unknown-linux-gnu
-          - x86_64-pc-windows-msvc
+          - x86_64-pc-windows-gnu
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-          - target: x86_64-pc-windows-msvc
+          - target: x86_64-pc-windows-gnu
             os: windows-latest
             ext: .exe
       fail-fast: false
@@ -35,8 +35,6 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Build
-        env:
-          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld.exe
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Upload artifact
