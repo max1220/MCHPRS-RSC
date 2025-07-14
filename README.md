@@ -5,24 +5,52 @@ This fork adds basic Lua scripting support for MCHPRS.
 
 ## Lua Usage
 
-The `global.lua` script is executed, and should provide certain callback
-function to interact with the MCHPRS server.
+When a plot is loaded the `global.lua` script is executed in a new Lua environment.
+This script is used to extend the functionality of the MCHPRS server.
+A script executed by the server has the following environment:
 
+
+### Globals
+
+```lua
+MCHPRS_API_VERSION
+MCHPRS_PLOT_X
+MCHPRS_PLOT_Z
+MCHPRS_PLOT_OWNER
+PLOT
 ```
-function on_load(plot) end -- called when plot is ready
 
-function on_chat(plot, player, command, args) end -- return true if handled
+### Callback Functions
 
-function on_tick(plot) end -- called every tick()
+```lua
+function on_tick(plot) print("on_tick") end
+function on_chat(plot, player_uuid, message_json) print("on_chat", player_uuid, message_json) end
+function on_command(plot, player_uuid, command, args) print("on_command", player_uuid, command, args) end
+function on_join(plot, player_uuid) print("on_join", player_uuid) end
+function on_leave(plot, player_uuid) print("on_leave", player_uuid) end
+function on_disconnect(plot, player_uuid) print("on_disconnect", player_uuid) end
+function on_shutdown(plot) print("on_shutdown") end
+function on_load(plot) print("on_load") end
+```
 
-plot:getBlockID(x,y,z) -- MCHPRS-internal integer block IDs
+### Plot Methods
+
+```lua
+plot:listPlayers() -- list of: { username, uuid, x,y,z, yaw,pitch, first_x,first_y,first_z, second_x,second_y,second_z }
+plot:sendChatMessage(player_uuid, message)
+plot:broadcastChatMessage(message)
+plot:getDisableTicking()
+plot:setDisableTicking(disable_ticking)
+plot:setAlwaysRunning(always_running)
+plot:getBlockID(x,y,z)
 plot:setBlockID(x,y,z, block_id)
-
-plot:getDisableTicking() -- "tick-freeze/unfreeze"
-plot:setDisableTicking(bool)
 ```
 
 
+
+(Original README below)
+
+-------------
 
 # Minecraft High-Performance Redstone Server
 

@@ -212,10 +212,13 @@ impl Plot {
         }
     }
 
-    // Handles any command using Lua
+    // Handles a command using a Lua callback function
     fn handle_lua_command(&mut self, player: usize, command: &str, args: &[&str]) -> bool {
-        if let Some(on_chat) = &self.lua_on_chat {
-            return on_chat.call::<bool>((player, command, args)).unwrap();
+        if let Some(on_command) = &self.lua_on_command {
+            let uuid = self.players[player].uuid;
+            return on_command
+                .call::<bool>((uuid.to_string(), command, args))
+                .unwrap();
         }
         return true;
     }

@@ -1,18 +1,28 @@
-print("LUA FILE LOAD")
+-- plot methods:
+--  plot:listPlayers()
+--  plot:sendChatMessage(player_uuid, message)
+--  plot:broadcastChatMessage(message)
+--  plot:getDisableTicking()
+--  plot:setDisableTicking(disable_ticking)
+--  plot:setAlwaysRunning(always_running)
+--  plot:getBlockID(x,y,z)
+--  plot:setBlockID(x,y,z, block_id)
 
-function on_load(plot)
-	print("LUA PLOT LOAD", plot)
+-- fields returned by plot:listPlayers():
+--  username, uuid, x,y,z, yaw,pitch, first_x,first_y,first_z, second_x,second_y,second_z
 
-	for y=1, 100 do
-		plot:setBlockID(1,y,1, 128)
-	end
+-- globals:
+--  MCHPRS_API_VERSION
+--  MCHPRS_PLOT_X
+--  MCHPRS_PLOT_Z
+--  MCHPRS_PLOT_OWNER
+--  PLOT
 
-end
-
-function on_chat(plot, player, command, args)
-	print("LUA PLOT COMMAND", plot, player, command, args)
-end
-
-function on_tick(plot)
-	--print("ON PLOT TICK", plot)
-end
+--function on_tick(plot) print("on_tick") end
+function on_chat(plot, player_uuid, message_json) print("on_chat", player_uuid, message_json) end
+function on_command(plot, player_uuid, command, args) print("on_command", player_uuid, command, args) end
+function on_join(plot, player_uuid) print("on_join", player_uuid) end
+function on_leave(plot, player_uuid) print("on_leave", player_uuid) end
+function on_disconnect(plot, player_uuid) print("on_disconnect", player_uuid) end
+function on_shutdown(plot) print("on_shutdown") end
+function on_load(plot) print("on_load") end

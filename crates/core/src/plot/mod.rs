@@ -107,6 +107,11 @@ pub struct Plot {
     // Lua callback functions
     lua_on_tick: Option<Function>,
     lua_on_chat: Option<Function>,
+    lua_on_command: Option<Function>,
+    lua_on_join: Option<Function>,
+    lua_on_leave: Option<Function>,
+    lua_on_disconnect: Option<Function>,
+    lua_on_shutdown: Option<Function>,
 }
 
 pub struct PlotWorld {
@@ -289,6 +294,49 @@ impl UserData for Plot {
             Self::run(this);
             return Ok(true);
         });
+        methods.add_method_mut("listPlayers", |lua, this, ()| {
+            let players_table = lua.create_table()?;
+            for player in this.players.iter() {
+                let player_table = lua.create_table().unwrap();
+                player_table.set("username", player.username.clone())?;
+                player_table.set("uuid", player.uuid.to_string())?;
+                player_table.set("x", player.pos.x)?;
+                player_table.set("y", player.pos.y)?;
+                player_table.set("z", player.pos.z)?;
+                player_table.set("yaw", player.yaw)?;
+                player_table.set("pitch", player.pitch)?;
+                player_table.set("selected_slot", player.selected_slot)?;
+                if let Some(pos) = player.first_position {
+                    player_table.set("first_x", pos.x)?;
+                    player_table.set("first_y", pos.y)?;
+                    player_table.set("first_z", pos.z)?;
+                }
+                if let Some(pos) = player.second_position {
+                    player_table.set("second_x", pos.x)?;
+                    player_table.set("second_y", pos.y)?;
+                    player_table.set("second_z", pos.z)?;
+                }
+                players_table.set(player.uuid.to_string(), player_table)?;
+            }
+            return Ok(players_table);
+        });
+        methods.add_method_mut(
+            "sendChatMessage",
+            |_, this, (uuid, msg): (String, String)| {
+                if let Some(&ref player) = this
+                    .players
+                    .iter()
+                    .find(|&player| player.uuid.to_string() == uuid)
+                {
+                    player.send_chat_message(&TextComponent::from_legacy_text(&msg));
+                }
+                return Ok(true);
+            },
+        );
+        methods.add_method_mut("broadcastChatMessage", |_, this, msg: String| {
+            this.broadcast_plot_chat_message(&msg);
+            return Ok(true);
+        });
         methods.add_method_mut("getDisableTicking", |_, this, ()| {
             return Ok(this.disable_ticking);
         });
@@ -296,12 +344,27 @@ impl UserData for Plot {
             this.disable_ticking = val;
             return Ok(true);
         });
-        methods.add_method_mut("getBlockID", |_, this, (x,y,z):(i32, i32, i32)| {
+        methods.add_method_mut("setAlwaysRunning", |_, this, val: bool| {
+            this.always_running = val;
+            return Ok(true);
+        });
+        methods.add_method_mut("getBlockID", |_, this, (x, y, z): (i32, i32, i32)| {
             return Ok(this.world.get_block(BlockPos::new(x, y, z)).get_id());
         });
-        methods.add_method_mut("setBlockID", |_, this, (x,y,z, id):(i32, i32, i32, u32)| {
-            this.world.set_block(BlockPos::new(x, y, z), Block::from_id(id));
-            return Ok(true);
+        methods.add_method_mut(
+            "setBlockID",
+            |_, this, (x, y, z, id): (i32, i32, i32, u32)| {
+                this.world
+                    .set_block(BlockPos::new(x, y, z), Block::from_id(id));
+                return Ok(true);
+            },
+        );
+        methods.add_meta_method("__tostring", |_, this, ()| {
+            return Ok(format!(
+                "Plot ({x},{z})",
+                x = this.world.x,
+                z = this.world.z
+            ));
         });
     }
 }
@@ -453,6 +516,11 @@ impl Plot {
             .packet_senders
             .push(PlayerPacketSender::new(&player.client));
         self.scoreboard.add_player(&player);
+
+        if let Some(on_join) = &self.lua_on_join {
+            on_join.call::<()>(player.uuid.to_string()).unwrap();
+        }
+
         self.players.push(player);
         self.update_view_pos_for_player(self.players.len() - 1, true);
     }
@@ -811,6 +879,9 @@ impl Plot {
         self.destroy_entity(player.entity_id);
         self.locked_players.remove(&player.entity_id);
         self.scoreboard.remove_player(&player);
+        if let Some(on_leave) = &self.lua_on_leave {
+            on_leave.call::<()>(uuid.to_string()).unwrap();
+        }
         player
     }
 
@@ -892,6 +963,12 @@ impl Plot {
                     for player in &mut self.players {
                         player.send_chat_message(&message);
                     }
+                    let message_json = serde_json::to_string(&message).unwrap();
+                    if let Some(on_chat) = &self.lua_on_chat {
+                        on_chat
+                            .call::<()>((_sender.to_string(), message_json))
+                            .unwrap();
+                    }
                 }
                 BroadcastMessage::PlayerJoinedInfo(player_join_info) => {
                     let player_info = CPlayerInfoUpdate {
@@ -920,6 +997,9 @@ impl Plot {
                     .encode();
                     for player in &mut self.players {
                         player.client.send_packet(&player_info);
+                    }
+                    if let Some(on_disconnect) = &self.lua_on_disconnect {
+                        on_disconnect.call::<()>(uuid.to_string()).unwrap();
                     }
                 }
                 BroadcastMessage::Shutdown => {
@@ -1204,6 +1284,11 @@ impl Plot {
             initial_player: None,
             lua_on_tick: None,
             lua_on_chat: None,
+            lua_on_command: None,
+            lua_on_join: None,
+            lua_on_leave: None,
+            lua_on_disconnect: None,
+            lua_on_shutdown: None,
         }
     }
 
@@ -1248,16 +1333,24 @@ impl Plot {
     }
 
     fn run_with_lua(mut self) -> Result<(), LuaError> {
-        info!("Running plot with Lua support, setting up...");
+        info!(
+            "Running plot ({x},{z}) with Lua support",
+            x = self.world.x,
+            z = self.world.z
+        );
 
+        // create Lua state and assign some global variables
         let lua_state = Lua::new();
-
         let globals = lua_state.globals();
-        globals.set("mchprs_x_api_version", "0.0.0").unwrap();
-        globals.set("plot_x", self.world.x).unwrap();
-        globals.set("plot_z", self.world.z).unwrap();
+        globals.set("MCHPRS_API_VERSION", "0.0.0")?;
+        globals.set("MCHPRS_PLOT_X", self.world.x)?;
+        globals.set("MCHPRS_PLOT_Z", self.world.z)?;
+        if self.owner.is_some() {
+            globals.set("MCHPRS_PLOT_OWNER", self.owner.unwrap())?;
+        }
 
         // load lua file for all plots
+        // TODO: Load Lua file for specific plot?
         let global_lua_path = Path::new("./global.lua");
         if global_lua_path.exists() {
             let mut file_data = String::new();
@@ -1265,7 +1358,7 @@ impl Plot {
             lua_state.load(file_data).exec()?;
         }
 
-        // TODO: Load Lua file for specific plot?
+        // create function wrappers
         self.lua_on_tick = Some(
             lua_state
                 .load("function() if on_tick then on_tick(PLOT) end end")
@@ -1273,13 +1366,40 @@ impl Plot {
         );
         self.lua_on_chat = Some(
             lua_state
-                .load("function(player, command, args) if on_chat then on_chat(PLOT, player, command, args) end end")
+                .load("function(player_uuid, message) if on_chat then on_chat(PLOT, player_uuid, message) end end")
+                .eval::<Function>()?,
+        );
+        self.lua_on_command = Some(
+            lua_state
+                .load("function(player_uuid, command, args) if on_command then on_command(PLOT, player_uuid, command, args) end end")
+                .eval::<Function>()?,
+        );
+        self.lua_on_join = Some(
+            lua_state
+                .load("function(player_uuid) if on_join then on_join(PLOT, player_uuid) end end")
+                .eval::<Function>()?,
+        );
+        self.lua_on_leave = Some(
+            lua_state
+                .load("function(player_uuid) if on_leave then on_leave(PLOT, player_uuid) end end")
+                .eval::<Function>()?,
+        );
+        self.lua_on_disconnect = Some(
+            lua_state
+                .load("function(player_uuid) if on_disconnect then on_disconnect(PLOT, player_uuid) end end")
+                .eval::<Function>()?,
+        );
+        self.lua_on_shutdown = Some(
+            lua_state
+                .load("function() if on_shutdown then on_shutdown(PLOT) end end")
                 .eval::<Function>()?,
         );
 
-        info!("Lua setup done, calling on_load!");
+        // turn over control to Lua(lua calls plot.run and "owns" the plot)
         lua_state
-            .load("function(_plot) PLOT = _plot; if on_load then on_load(PLOT); PLOT:_run(); end end")
+            .load(
+                "function(_plot) PLOT = _plot; if on_load then on_load(_plot); end _plot:_run(); end",
+            )
             .eval::<Function>()?
             .call::<()>(self)?;
 
@@ -1313,6 +1433,10 @@ impl Plot {
             } else {
                 thread::yield_now();
             }
+        }
+
+        if let Some(on_shutdown) = &self.lua_on_shutdown {
+            on_shutdown.call::<()>(()).unwrap();
         }
 
         self.save();
