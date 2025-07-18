@@ -12,6 +12,7 @@ use mchprs_network::PlayerPacketSender;
 use mchprs_redpiler::CompilerOptions;
 use mchprs_save_data::plot_data::{Tps, WorldSendRate};
 use mchprs_text::TextComponent;
+use mlua::Function;
 use once_cell::sync::Lazy;
 use std::ops::Add;
 use std::str::FromStr;
@@ -214,11 +215,19 @@ impl Plot {
 
     // Handles a command using a Lua callback function
     fn handle_lua_command(&mut self, player: usize, command: &str, args: &[&str]) -> bool {
-        if let Some(on_command) = &self.lua_on_command {
+        if let Some(lua_state) = self.lua_state.take() {
             let uuid = self.players[player].uuid;
-            return on_command
-                .call::<bool>((uuid.to_string(), command, args))
-                .unwrap();
+            if let Ok(on_command) = lua_state.globals().get::<Function>("on_command") {
+                let _ = lua_state.scope(|scope| {
+                    on_command.call::<()>((
+                        scope.create_userdata_ref_mut(self).unwrap(),
+                        uuid.to_string(),
+                        command,
+                        args,
+                    ))
+                });
+            }
+            self.lua_state = Some(lua_state);
         }
         return true;
     }

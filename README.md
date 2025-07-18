@@ -10,6 +10,17 @@ This script is used to extend the functionality of the MCHPRS server.
 A script executed by the server has the following environment:
 
 
+## Warning
+
+This project does not do any kind of isolation, meaning the Lua
+script is unrestricted in it's use of dangerous APIs like `os`, `file`, `ffi` etc.
+
+Hosting the default REPL script on your server means everyone who can connect
+to your server can run arbitrary commands on the host system!
+
+You have been warned!
+
+
 ### Globals
 
 ```lua
@@ -17,26 +28,25 @@ MCHPRS_API_VERSION
 MCHPRS_PLOT_X
 MCHPRS_PLOT_Z
 MCHPRS_PLOT_OWNER
-PLOT
 ```
 
 ### Callback Functions
 
 ```lua
-function on_tick(plot) print("on_tick") end
-function on_chat(plot, player_uuid, message_json) print("on_chat", player_uuid, message_json) end
-function on_command(plot, player_uuid, command, args) print("on_command", player_uuid, command, args) end
-function on_join(plot, player_uuid) print("on_join", player_uuid) end
-function on_leave(plot, player_uuid) print("on_leave", player_uuid) end
-function on_disconnect(plot, player_uuid) print("on_disconnect", player_uuid) end
-function on_shutdown(plot) print("on_shutdown") end
-function on_load(plot) print("on_load") end
+on_tick(plot)
+on_chat(plot, player_uuid, message_json) 
+on_command(plot, player_uuid, command, args)"
+on_join(plot, player_uuid)
+on_leave(plot, player_uuid)
+on_disconnect(plot, player_uuid)
+on_shutdown(plot)
+on_load(plot)
 ```
 
 ### Plot Methods
 
 ```lua
-plot:listPlayers() -- list of: { username, uuid, x,y,z, yaw,pitch, first_x,first_y,first_z, second_x,second_y,second_z }
+plot:listPlayers() -- Index is uuid. Every player has: username, uuid, x,y,z, yaw,pitch, first_x,first_y,first_z, second_x,second_y,second_z
 plot:sendChatMessage(player_uuid, message)
 plot:broadcastChatMessage(message)
 plot:getDisableTicking()

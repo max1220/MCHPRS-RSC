@@ -105,13 +105,7 @@ pub struct Plot {
     initial_player: Option<Player>,
 
     // Lua callback functions
-    lua_on_tick: Option<Function>,
-    lua_on_chat: Option<Function>,
-    lua_on_command: Option<Function>,
-    lua_on_join: Option<Function>,
-    lua_on_leave: Option<Function>,
-    lua_on_disconnect: Option<Function>,
-    lua_on_shutdown: Option<Function>,
+    lua_state: Option<Lua>,
 }
 
 pub struct PlotWorld {
@@ -290,10 +284,6 @@ impl World for PlotWorld {
 
 impl UserData for Plot {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method_mut("_run", |_, this, ()| {
-            Self::run(this);
-            return Ok(true);
-        });
         methods.add_method_mut("listPlayers", |lua, this, ()| {
             let players_table = lua.create_table()?;
             for player in this.players.iter() {
@@ -517,8 +507,16 @@ impl Plot {
             .push(PlayerPacketSender::new(&player.client));
         self.scoreboard.add_player(&player);
 
-        if let Some(on_join) = &self.lua_on_join {
-            on_join.call::<()>(player.uuid.to_string()).unwrap();
+        if let Some(lua_state) = self.lua_state.take() {
+            if let Ok(on_join) = lua_state.globals().get::<Function>("on_join") {
+                let _ = lua_state.scope(|scope| {
+                    on_join.call::<()>((
+                        scope.create_userdata_ref_mut(self).unwrap(),
+                        player.uuid.to_string(),
+                    ))
+                });
+            }
+            self.lua_state = Some(lua_state);
         }
 
         self.players.push(player);
@@ -879,9 +877,19 @@ impl Plot {
         self.destroy_entity(player.entity_id);
         self.locked_players.remove(&player.entity_id);
         self.scoreboard.remove_player(&player);
-        if let Some(on_leave) = &self.lua_on_leave {
-            on_leave.call::<()>(uuid.to_string()).unwrap();
+
+        if let Some(lua_state) = self.lua_state.take() {
+            if let Ok(on_leave) = lua_state.globals().get::<Function>("on_leave") {
+                let _ = lua_state.scope(|scope| {
+                    on_leave.call::<()>((
+                        scope.create_userdata_ref_mut(self).unwrap(),
+                        uuid.to_string(),
+                    ))
+                });
+            }
+            self.lua_state = Some(lua_state);
         }
+
         player
     }
 
@@ -963,11 +971,18 @@ impl Plot {
                     for player in &mut self.players {
                         player.send_chat_message(&message);
                     }
-                    let message_json = serde_json::to_string(&message).unwrap();
-                    if let Some(on_chat) = &self.lua_on_chat {
-                        on_chat
-                            .call::<()>((_sender.to_string(), message_json))
-                            .unwrap();
+                    if let Some(lua_state) = self.lua_state.take() {
+                        let message_json = serde_json::to_string(&message).unwrap();
+                        if let Ok(on_leave) = lua_state.globals().get::<Function>("on_leave") {
+                            let _ = lua_state.scope(|scope| {
+                                on_leave.call::<()>((
+                                    scope.create_userdata_ref_mut(self).unwrap(),
+                                    _sender.to_string(),
+                                    message_json,
+                                ))
+                            });
+                        }
+                        self.lua_state = Some(lua_state);
                     }
                 }
                 BroadcastMessage::PlayerJoinedInfo(player_join_info) => {
@@ -998,8 +1013,18 @@ impl Plot {
                     for player in &mut self.players {
                         player.client.send_packet(&player_info);
                     }
-                    if let Some(on_disconnect) = &self.lua_on_disconnect {
-                        on_disconnect.call::<()>(uuid.to_string()).unwrap();
+                    if let Some(lua_state) = self.lua_state.take() {
+                        if let Ok(on_disconnect) =
+                            lua_state.globals().get::<Function>("on_disconnect")
+                        {
+                            let _ = lua_state.scope(|scope| {
+                                on_disconnect.call::<()>((
+                                    scope.create_userdata_ref_mut(self).unwrap(),
+                                    uuid.to_string(),
+                                ))
+                            });
+                        }
+                        self.lua_state = Some(lua_state);
                     }
                 }
                 BroadcastMessage::Shutdown => {
@@ -1187,8 +1212,13 @@ impl Plot {
         self.remove_oob_players();
 
         // call Lua tick handler
-        if let Some(on_tick) = &self.lua_on_tick {
-            on_tick.call::<()>(()).unwrap();
+        if let Some(lua_state) = self.lua_state.take() {
+            if let Ok(on_tick) = lua_state.globals().get::<Function>("on_tick") {
+                let _ = lua_state.scope(|scope| {
+                    on_tick.call::<()>(scope.create_userdata_ref_mut(self).unwrap())
+                });
+            }
+            self.lua_state = Some(lua_state);
         }
     }
 
@@ -1282,13 +1312,7 @@ impl Plot {
             world,
             disable_ticking: false,
             initial_player: None,
-            lua_on_tick: None,
-            lua_on_chat: None,
-            lua_on_command: None,
-            lua_on_join: None,
-            lua_on_leave: None,
-            lua_on_disconnect: None,
-            lua_on_shutdown: None,
+            lua_state: None,
         }
     }
 
@@ -1332,7 +1356,7 @@ impl Plot {
         self.reset_timings();
     }
 
-    fn run_with_lua(mut self) -> Result<(), LuaError> {
+    fn run_with_lua(mut self, script_path: &str) -> Result<(), LuaError> {
         info!(
             "Running plot ({x},{z}) with Lua support",
             x = self.world.x,
@@ -1350,64 +1374,40 @@ impl Plot {
         }
 
         // load lua file for all plots
-        // TODO: Load Lua file for specific plot?
-        let global_lua_path = Path::new("./global.lua");
+        let global_lua_path = Path::new(script_path);
         if global_lua_path.exists() {
             let mut file_data = String::new();
             File::open(global_lua_path)?.read_to_string(&mut file_data)?;
             lua_state.load(file_data).exec()?;
         }
 
-        // create function wrappers
-        self.lua_on_tick = Some(
-            lua_state
-                .load("function() if on_tick then on_tick(PLOT) end end")
-                .eval::<Function>()?,
-        );
-        self.lua_on_chat = Some(
-            lua_state
-                .load("function(player_uuid, message) if on_chat then on_chat(PLOT, player_uuid, message) end end")
-                .eval::<Function>()?,
-        );
-        self.lua_on_command = Some(
-            lua_state
-                .load("function(player_uuid, command, args) if on_command then on_command(PLOT, player_uuid, command, args) end end")
-                .eval::<Function>()?,
-        );
-        self.lua_on_join = Some(
-            lua_state
-                .load("function(player_uuid) if on_join then on_join(PLOT, player_uuid) end end")
-                .eval::<Function>()?,
-        );
-        self.lua_on_leave = Some(
-            lua_state
-                .load("function(player_uuid) if on_leave then on_leave(PLOT, player_uuid) end end")
-                .eval::<Function>()?,
-        );
-        self.lua_on_disconnect = Some(
-            lua_state
-                .load("function(player_uuid) if on_disconnect then on_disconnect(PLOT, player_uuid) end end")
-                .eval::<Function>()?,
-        );
-        self.lua_on_shutdown = Some(
-            lua_state
-                .load("function() if on_shutdown then on_shutdown(PLOT) end end")
-                .eval::<Function>()?,
-        );
+        // load lua file for this plot
+        /*
+        let plot_lua_path = PathBuf::from_str(&format!("./plot.{x}.{z}.lua", x=self.world.x, z=self.world.z)).unwrap();
+        if plot_lua_path.exists() {
+            let mut file_data = String::new();
+            File::open(plot_lua_path)?.read_to_string(&mut file_data)?;
+            lua_state.load(file_data).exec()?;
+        }
+        */
 
-        // turn over control to Lua(lua calls plot.run and "owns" the plot)
-        lua_state
-            .load(
-                "function(_plot) PLOT = _plot; if on_load then on_load(_plot); end _plot:_run(); end",
-            )
-            .eval::<Function>()?
-            .call::<()>(self)?;
+        self.lua_state = Some(lua_state);
+        self.run();
 
         return Ok(());
     }
 
     fn run(&mut self) {
         let _guard = self.async_rt.enter();
+
+        if let Some(lua_state) = self.lua_state.take() {
+            if let Ok(on_load) = lua_state.globals().get::<Function>("on_load") {
+                let _ = lua_state.scope(|scope| {
+                    on_load.call::<()>(scope.create_userdata_ref_mut(self).unwrap())
+                });
+            }
+            self.lua_state = Some(lua_state);
+        }
 
         if let Some(player) = self.initial_player.take() {
             self.enter_plot(player);
@@ -1435,8 +1435,13 @@ impl Plot {
             }
         }
 
-        if let Some(on_shutdown) = &self.lua_on_shutdown {
-            on_shutdown.call::<()>(()).unwrap();
+        if let Some(lua_state) = self.lua_state.take() {
+            if let Ok(on_shutdown) = lua_state.globals().get::<Function>("on_shutdown") {
+                let _ = lua_state.scope(|scope| {
+                    on_shutdown.call::<()>(scope.create_userdata_ref_mut(self).unwrap())
+                });
+            }
+            self.lua_state = Some(lua_state);
         }
 
         self.save();
@@ -1468,7 +1473,12 @@ impl Plot {
                 move || match Plot::load(x, z, rx, tx, priv_rx, always_running) {
                     Ok(mut plot) => {
                         plot.initial_player = initial_player;
-                        return plot.run_with_lua();
+                        if let Some(script_path) = &CONFIG.lua_script_path {
+                            let _ = plot.run_with_lua(script_path);
+                        } else {
+                            plot.run();
+                        }
+                        return;
                     }
                     Err((err, tx)) => {
                         if let Some(mut player) = initial_player {

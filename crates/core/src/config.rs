@@ -67,6 +67,7 @@ gen_config! {
     bind_address: String = "0.0.0.0:25565".to_string(),
     motd: String = "Minecraft High Performance Redstone Server".to_string(),
     chat_format: String = "<{username}> {message}".to_string(),
+    lua_script_path: Option<String> = None,
     max_players: i64 = 99999,
     view_distance: i64 = 8,
     whitelist: bool = false,
