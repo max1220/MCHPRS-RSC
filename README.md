@@ -7,12 +7,9 @@ This fork adds basic Lua scripting support for MCHPRS.
 
 Download the pre-release from: https://github.com/max1220/MCHPRS-X/releases
 
-
-## Lua Usage
-
-When a plot is loaded the `global.lua`(configured in `Config.toml`) script is executed in a new Lua environment.
-This script is used to extend the functionality of the MCHPRS server.
-A script executed by the server has the following environment:
+The Windows builds might trigger a Windows Defender warning,
+due to being cross-compiled using MinGW. You can safely ignore those, or,
+if you don't trust me, review patches and build the project yourself.
 
 
 ## Warning
@@ -24,6 +21,15 @@ Hosting the default REPL script on your server means everyone who can connect
 to your server can run arbitrary commands on the host system!
 
 You have been warned!
+
+
+
+## Lua Usage
+
+When a plot is loaded the `global.lua`(configured as `lua_script_path`
+in `Config.toml`) script is executed in a new Lua environment.
+This script is used to extend the functionality of the MCHPRS server.
+A script executed by the server has the following environment:
 
 
 ### Globals
