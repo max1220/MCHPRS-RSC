@@ -1042,6 +1042,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "luau0-src"
+version = "0.15.4+luau682"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c658d07cf320153a615d85ac44c44548817b4e68c9f34b124648dd3c673030e6"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "matchers"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1270,6 +1279,7 @@ dependencies = [
  "cfg-if",
  "lua-src",
  "luajit-src",
+ "luau0-src",
  "pkg-config",
 ]
 

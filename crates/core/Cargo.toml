@@ -47,4 +47,4 @@ once_cell = { workspace = true }
 rustc-hash = { workspace = true }
 hmac = { workspace = true }
 sha2 = { workspace = true }
-mlua = { workspace = true, features = ["luajit", "vendored", "async", "serialize"] }
+mlua = { workspace = true, features = ["luau-jit", "vendored", "async", "serialize"] }

@@ -215,21 +215,22 @@ impl Plot {
 
     // Handles a command using a Lua callback function
     fn handle_lua_command(&mut self, player: usize, command: &str, args: &[&str]) -> bool {
+        let mut ret = false;
         if let Some(lua_state) = self.lua_state.take() {
             let uuid = self.players[player].uuid;
             if let Ok(on_command) = lua_state.globals().get::<Function>("on_command") {
-                let _ = lua_state.scope(|scope| {
-                    on_command.call::<()>((
+                ret = lua_state.scope(|scope| {
+                    return on_command.call::<bool>((
                         scope.create_userdata_ref_mut(self).unwrap(),
                         uuid.to_string(),
                         command,
                         args,
                     ))
-                });
+                }).unwrap();
             }
             self.lua_state = Some(lua_state);
         }
-        return true;
+        return ret;
     }
 
     // Returns true if packets should stop being handled

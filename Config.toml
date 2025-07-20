@@ -7,4 +7,5 @@ whitelist = false
 schemati = false
 block_in_hitbox = true
 auto_redpiler = false
-lua_script_path = "./global.lua"
+lua_script_path = "./plugin_loader.lua"
+lua_enable_sandbox = true

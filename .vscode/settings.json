@@ -1,0 +1,19 @@
+{
+	"Lua.diagnostics.disable": [
+		
+	],
+	"Lua.diagnostics.globals": [
+		"info",
+		"warn",
+		"err",
+		"load_plugin",
+		"on_tick",
+		"on_chat",
+		"on_join",
+		"on_leave",
+		"on_disconnect",
+		"on_shutdown",
+		"on_load",
+		"on_command",
+	]
+}

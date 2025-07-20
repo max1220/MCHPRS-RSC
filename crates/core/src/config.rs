@@ -68,6 +68,7 @@ gen_config! {
     motd: String = "Minecraft High Performance Redstone Server".to_string(),
     chat_format: String = "<{username}> {message}".to_string(),
     lua_script_path: Option<String> = None,
+    lua_enable_sandbox: bool = true,
     max_players: i64 = 99999,
     view_distance: i64 = 8,
     whitelist: bool = false,

@@ -101,6 +101,9 @@ pub struct Plot {
     // if the plot should tick redstone(for pausing/unpausing from RSC or command)
     disable_ticking: bool,
 
+    // if the plot should automatically flush world updates
+    disable_world_flush: bool,
+
     // the initial player connected to this plot()
     initial_player: Option<Player>,
 
@@ -283,7 +286,78 @@ impl World for PlotWorld {
 }
 
 impl UserData for Plot {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("alwaysRunning", |_, this| Ok(this.always_running));
+        fields.add_field_method_set("alwaysRunning", |_, this, val| {
+            this.always_running = val;
+            Ok(())
+        });
+        fields.add_field_method_get("disableTicking", |_, this| Ok(this.disable_ticking));
+        fields.add_field_method_set("disableTicking", |_, this, val| {
+            this.disable_ticking = val;
+            Ok(())
+        });
+        fields.add_field_method_get("disableWorldFlush", |_, this| Ok(this.disable_world_flush));
+        fields.add_field_method_set("disableWorldFlush", |_, this, val| {
+            this.disable_world_flush = val;
+            Ok(())
+        });
+        fields.add_field_method_get("worldSendRate", |_, this| Ok(this.world_send_rate.0));
+        fields.add_field_method_set("worldSendRate", |_, this, val| {
+            this.world_send_rate.0 = val;
+            Ok(())
+        });
+    }
+
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method_mut("broadcastChatMessage", |_, this, msg: String| {
+            this.broadcast_plot_chat_message(&msg);
+            return Ok(true);
+        });
+        methods.add_method_mut("flushBlockChanges", |_, this, ()| {
+            this.last_world_send_time = Instant::now();
+            this.world.flush_block_changes();
+            return Ok(());
+        });
+        methods.add_method_mut("getBlockID", |_, this, (x, y, z): (i32, i32, i32)| {
+            return Ok(this.world.get_block(BlockPos::new(x, y, z)).get_id());
+        });
+        methods.add_method_mut(
+            "getRedstonePower",
+            |_, this, (x, y, z, face_str): (i32, i32, i32, String)| {
+                let pos = BlockPos::new(x, y, z);
+                let block = this.world.get_block(pos);
+                let face = match face_str.as_str() {
+                    "Bottom" => BlockFace::Bottom,
+                    "East" => BlockFace::East,
+                    "North" => BlockFace::North,
+                    "South" => BlockFace::South,
+                    "Top" => BlockFace::Top,
+                    "West" => BlockFace::West,
+                    _ => panic!("Invalid block face!"),
+                };
+                return Ok(mchprs_redstone::get_redstone_power(
+                    block,
+                    &mut this.world,
+                    pos,
+                    face,
+                ));
+            },
+        );
+        methods.add_method_mut("kickPlayer", |_, this, (uuid, reason): (String, String)| {
+            for player in this.players.iter() {
+                if player.uuid.to_string() == uuid {
+                    player.kick(
+                        TextComponent::from_legacy_text(&reason)
+                            .first()
+                            .unwrap()
+                            .clone(),
+                    );
+                    return Ok(true);
+                }
+            }
+            return Ok(false);
+        });
         methods.add_method_mut("listPlayers", |lua, this, ()| {
             let players_table = lua.create_table()?;
             for player in this.players.iter() {
@@ -311,6 +385,14 @@ impl UserData for Plot {
             return Ok(players_table);
         });
         methods.add_method_mut(
+            "sendBlockChange",
+            |_, this, (x, y, z, block_id): (i32, i32, i32, u32)| {
+                let pos = BlockPos::new(x, y, z);
+                this.send_block_change(pos, block_id);
+                return Ok(());
+            },
+        );
+        methods.add_method_mut(
             "sendChatMessage",
             |_, this, (uuid, msg): (String, String)| {
                 if let Some(&ref player) = this
@@ -323,24 +405,6 @@ impl UserData for Plot {
                 return Ok(true);
             },
         );
-        methods.add_method_mut("broadcastChatMessage", |_, this, msg: String| {
-            this.broadcast_plot_chat_message(&msg);
-            return Ok(true);
-        });
-        methods.add_method_mut("getDisableTicking", |_, this, ()| {
-            return Ok(this.disable_ticking);
-        });
-        methods.add_method_mut("setDisableTicking", |_, this, val: bool| {
-            this.disable_ticking = val;
-            return Ok(true);
-        });
-        methods.add_method_mut("setAlwaysRunning", |_, this, val: bool| {
-            this.always_running = val;
-            return Ok(true);
-        });
-        methods.add_method_mut("getBlockID", |_, this, (x, y, z): (i32, i32, i32)| {
-            return Ok(this.world.get_block(BlockPos::new(x, y, z)).get_id());
-        });
         methods.add_method_mut(
             "setBlockID",
             |_, this, (x, y, z, id): (i32, i32, i32, u32)| {
@@ -349,6 +413,30 @@ impl UserData for Plot {
                 return Ok(true);
             },
         );
+        methods.add_method_mut(
+            "teleportPlayer",
+            |_, this, (uuid, x, y, z): (String, f64, f64, f64)| {
+                for player in this.players.iter_mut() {
+                    if player.uuid.to_string() == uuid {
+                        player.teleport(PlayerPos::new(x, y, z));
+                        return Ok(true);
+                    }
+                }
+                return Ok(false);
+            },
+        );
+        methods.add_method_mut(
+            "updateSurroundingBlocks",
+            |_, this, (x, y, z): (i32, i32, i32)| {
+                mchprs_redstone::update_surrounding_blocks(&mut this.world, BlockPos::new(x, y, z));
+                return Ok(());
+            },
+        );
+        methods.add_method_mut("useRedstone", |_, this, (x, y, z): (i32, i32, i32)| {
+            let pos = BlockPos::new(x, y, z);
+            let block = this.world.get_block(pos);
+            return Ok(mchprs_redstone::on_use(block, &mut this.world, pos));
+        });
         methods.add_meta_method("__tostring", |_, this, ()| {
             return Ok(format!(
                 "Plot ({x},{z})",
@@ -509,12 +597,14 @@ impl Plot {
 
         if let Some(lua_state) = self.lua_state.take() {
             if let Ok(on_join) = lua_state.globals().get::<Function>("on_join") {
-                let _ = lua_state.scope(|scope| {
-                    on_join.call::<()>((
-                        scope.create_userdata_ref_mut(self).unwrap(),
-                        player.uuid.to_string(),
-                    ))
-                });
+                lua_state
+                    .scope(|scope| {
+                        on_join.call::<()>((
+                            scope.create_userdata_ref_mut(self).unwrap(),
+                            player.uuid.to_string(),
+                        ))
+                    })
+                    .unwrap();
             }
             self.lua_state = Some(lua_state);
         }
@@ -880,12 +970,14 @@ impl Plot {
 
         if let Some(lua_state) = self.lua_state.take() {
             if let Ok(on_leave) = lua_state.globals().get::<Function>("on_leave") {
-                let _ = lua_state.scope(|scope| {
-                    on_leave.call::<()>((
-                        scope.create_userdata_ref_mut(self).unwrap(),
-                        uuid.to_string(),
-                    ))
-                });
+                lua_state
+                    .scope(|scope| {
+                        on_leave.call::<()>((
+                            scope.create_userdata_ref_mut(self).unwrap(),
+                            uuid.to_string(),
+                        ))
+                    })
+                    .unwrap();
             }
             self.lua_state = Some(lua_state);
         }
@@ -974,13 +1066,15 @@ impl Plot {
                     if let Some(lua_state) = self.lua_state.take() {
                         let message_json = serde_json::to_string(&message).unwrap();
                         if let Ok(on_leave) = lua_state.globals().get::<Function>("on_leave") {
-                            let _ = lua_state.scope(|scope| {
-                                on_leave.call::<()>((
-                                    scope.create_userdata_ref_mut(self).unwrap(),
-                                    _sender.to_string(),
-                                    message_json,
-                                ))
-                            });
+                            lua_state
+                                .scope(|scope| {
+                                    on_leave.call::<()>((
+                                        scope.create_userdata_ref_mut(self).unwrap(),
+                                        _sender.to_string(),
+                                        message_json,
+                                    ))
+                                })
+                                .unwrap();
                         }
                         self.lua_state = Some(lua_state);
                     }
@@ -1017,12 +1111,14 @@ impl Plot {
                         if let Ok(on_disconnect) =
                             lua_state.globals().get::<Function>("on_disconnect")
                         {
-                            let _ = lua_state.scope(|scope| {
-                                on_disconnect.call::<()>((
-                                    scope.create_userdata_ref_mut(self).unwrap(),
-                                    uuid.to_string(),
-                                ))
-                            });
+                            lua_state
+                                .scope(|scope| {
+                                    on_disconnect.call::<()>((
+                                        scope.create_userdata_ref_mut(self).unwrap(),
+                                        uuid.to_string(),
+                                    ))
+                                })
+                                .unwrap();
                         }
                         self.lua_state = Some(lua_state);
                     }
@@ -1161,7 +1257,7 @@ impl Plot {
             };
 
             self.last_update_time = now;
-            if batch_size != 0 {
+            if (batch_size != 0) && !self.disable_ticking {
                 // 50_000 (= 3.33 MHz) here is arbitrary.
                 // We just need a number that's not too high so we actually get around to sending block updates.
                 let batch_size = batch_size.min(50_000) as u32;
@@ -1190,7 +1286,7 @@ impl Plot {
 
             let now = Instant::now();
             let time_since_last_world_send = now - self.last_world_send_time;
-            if time_since_last_world_send > world_send_rate {
+            if (time_since_last_world_send > world_send_rate) && !self.disable_world_flush {
                 self.last_world_send_time = now;
                 self.world.flush_block_changes();
             }
@@ -1214,9 +1310,9 @@ impl Plot {
         // call Lua tick handler
         if let Some(lua_state) = self.lua_state.take() {
             if let Ok(on_tick) = lua_state.globals().get::<Function>("on_tick") {
-                let _ = lua_state.scope(|scope| {
-                    on_tick.call::<()>(scope.create_userdata_ref_mut(self).unwrap())
-                });
+                lua_state
+                    .scope(|scope| on_tick.call::<()>(scope.create_userdata_ref_mut(self).unwrap()))
+                    .unwrap();
             }
             self.lua_state = Some(lua_state);
         }
@@ -1311,6 +1407,7 @@ impl Plot {
             scoreboard: Default::default(),
             world,
             disable_ticking: false,
+            disable_world_flush: false,
             initial_player: None,
             lua_state: None,
         }
@@ -1365,31 +1462,44 @@ impl Plot {
 
         // create Lua state and assign some global variables
         let lua_state = Lua::new();
+        lua_state.sandbox(CONFIG.lua_enable_sandbox)?;
         let globals = lua_state.globals();
         globals.set("MCHPRS_API_VERSION", "0.0.0")?;
         globals.set("MCHPRS_PLOT_X", self.world.x)?;
         globals.set("MCHPRS_PLOT_Z", self.world.z)?;
-        if self.owner.is_some() {
-            globals.set("MCHPRS_PLOT_OWNER", self.owner.unwrap())?;
+        if let Some(owner) = self.owner {
+            globals.set("MCHPRS_PLOT_OWNER", owner.to_string())?;
         }
+        // add logging functions
+        globals.set(
+            "info",
+            lua_state.create_function(|_, msg: String| {
+                info!("Lua: {}", msg);
+                return Ok(());
+            })?,
+        )?;
+        globals.set(
+            "warn",
+            lua_state.create_function(|_, msg: String| {
+                warn!("Lua: {}", msg);
+                return Ok(());
+            })?,
+        )?;
+        globals.set(
+            "err",
+            lua_state.create_function(|_, msg: String| {
+                error!("Lua: {}", msg);
+                return Ok(());
+            })?,
+        )?;
 
-        // load lua file for all plots
+        // load startup lua file
         let global_lua_path = Path::new(script_path);
         if global_lua_path.exists() {
             let mut file_data = String::new();
             File::open(global_lua_path)?.read_to_string(&mut file_data)?;
             lua_state.load(file_data).exec()?;
         }
-
-        // load lua file for this plot
-        /*
-        let plot_lua_path = PathBuf::from_str(&format!("./plot.{x}.{z}.lua", x=self.world.x, z=self.world.z)).unwrap();
-        if plot_lua_path.exists() {
-            let mut file_data = String::new();
-            File::open(plot_lua_path)?.read_to_string(&mut file_data)?;
-            lua_state.load(file_data).exec()?;
-        }
-        */
 
         self.lua_state = Some(lua_state);
         self.run();
@@ -1402,9 +1512,9 @@ impl Plot {
 
         if let Some(lua_state) = self.lua_state.take() {
             if let Ok(on_load) = lua_state.globals().get::<Function>("on_load") {
-                let _ = lua_state.scope(|scope| {
-                    on_load.call::<()>(scope.create_userdata_ref_mut(self).unwrap())
-                });
+                lua_state
+                    .scope(|scope| on_load.call::<()>(scope.create_userdata_ref_mut(self).unwrap()))
+                    .unwrap();
             }
             self.lua_state = Some(lua_state);
         }
@@ -1437,9 +1547,11 @@ impl Plot {
 
         if let Some(lua_state) = self.lua_state.take() {
             if let Ok(on_shutdown) = lua_state.globals().get::<Function>("on_shutdown") {
-                let _ = lua_state.scope(|scope| {
-                    on_shutdown.call::<()>(scope.create_userdata_ref_mut(self).unwrap())
-                });
+                lua_state
+                    .scope(|scope| {
+                        on_shutdown.call::<()>(scope.create_userdata_ref_mut(self).unwrap())
+                    })
+                    .unwrap();
             }
             self.lua_state = Some(lua_state);
         }
@@ -1474,7 +1586,7 @@ impl Plot {
                     Ok(mut plot) => {
                         plot.initial_player = initial_player;
                         if let Some(script_path) = &CONFIG.lua_script_path {
-                            let _ = plot.run_with_lua(script_path);
+                            plot.run_with_lua(script_path).unwrap();
                         } else {
                             plot.run();
                         }

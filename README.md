@@ -9,19 +9,39 @@ Download the pre-release from: https://github.com/max1220/MCHPRS-X/releases
 
 The Windows builds might trigger a Windows Defender warning,
 due to being cross-compiled using MinGW. You can safely ignore those, or,
-if you don't trust me, review patches and build the project yourself.
+if you don't trust me, review patches and build the project yourself
+(see original README.md below).
 
 
-## Warning
+## Sandboxing
 
-This project does not do any kind of isolation, meaning the Lua
-script is unrestricted in it's use of dangerous APIs like `os`, `file`, `ffi` etc.
+This implementation currently uses [Luau](https://luau.org/) to provide sandboxing.
+Loading untrusted plugins with sandboxing enabled should be reasonable safe.
 
-Hosting the default REPL script on your server means everyone who can connect
-to your server can run arbitrary commands on the host system!
+You can disable sandboxing via the Config.toml,
+which enables the use of unsafe functions and external libraries.
+This might damage or compromise your host system. You have been warned!
+
+You can also replace the Lua implementation:
+
+Edit the [mlua features](https://github.com/mlua-rs/mlua/blob/main/README.md#feature-flags)
+in `crates/core/Cargo.toml`, then comment out the
+`lua_state.sandbox(CONFIG.lua_enable_sandbox)?;` line in `crates/core/src/plot/mod.rs`.
+
+
+## REPL Warning
+
+Hosting the default REPL script on your server means everyone who can
+connect to your server can run arbitrary commands on the host system!
+If you have sandboxing disabled, this is extra bad, as users could
+run regular shell commands using os.execute/io.popen, etc!
 
 You have been warned!
 
+
+## TODO
+
+ * Implement a way to register command auto-complete nodes using Lua
 
 
 ## Lua Usage
@@ -44,29 +64,41 @@ MCHPRS_PLOT_OWNER
 ### Callback Functions
 
 ```lua
-on_tick(plot)
 on_chat(plot, player_uuid, message_json) 
-on_command(plot, player_uuid, command, args)"
+on_command(plot, player_uuid, command, args)
+on_disconnect(plot, player_uuid)
 on_join(plot, player_uuid)
 on_leave(plot, player_uuid)
-on_disconnect(plot, player_uuid)
-on_shutdown(plot)
 on_load(plot)
+on_shutdown(plot)
+on_tick(plot)
 ```
 
 ### Plot Methods
 
 ```lua
-plot:listPlayers() -- Index is uuid. Every player has: username, uuid, x,y,z, yaw,pitch, first_x,first_y,first_z, second_x,second_y,second_z
-plot:sendChatMessage(player_uuid, message)
 plot:broadcastChatMessage(message)
-plot:getDisableTicking()
-plot:setDisableTicking(disable_ticking)
-plot:setAlwaysRunning(always_running)
+plot:flushBlockChanges()
 plot:getBlockID(x,y,z)
+plot:getRedstonePower(x,y,z, face)
+plot:kickPlayer(player_uuid, reason)
+plot:listPlayers() -- Index is uuid. Every player has: username, uuid, x,y,z, yaw,pitch, first_x,first_y,first_z, second_x,second_y,second_z
+plot:send_block_change(x,y,z,block_id)
+plot:sendChatMessage(player_uuid, message)
 plot:setBlockID(x,y,z, block_id)
+plot:teleportPlayer(player_uuid, x,y,z)
+plot:updateSurroundingBlocks(x,y,z)
+plot:useRedstone(x,y,z)
 ```
 
+### Plot Fields
+
+```lua
+plot.alwaysRunning
+plot.disableTicking
+plot.disableWorldFlush
+plot.worldSendRate
+```
 
 
 (Original README below)
