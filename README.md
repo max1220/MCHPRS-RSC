@@ -13,30 +13,42 @@ if you don't trust me, review patches and build the project yourself
 (see original README.md below).
 
 
-## Sandboxing
+## Lua configuration
 
-This implementation currently uses [Luau](https://luau.org/) to provide sandboxing.
-Loading untrusted plugins with sandboxing enabled should be reasonable safe.
+This implementation currently uses [mlua](https://github.com/mlua-rs/mlua)
+as the Rust binding for Lua, which is configured to use the [Luau](https://luau.org/)
+Lua implementation by default.
+You can change the Lua implementation and mlua features flags in `crates/core/Cargo.toml`.
 
-You can disable sandboxing via the Config.toml,
-which enables the use of unsafe functions and external libraries.
-This might damage or compromise your host system. You have been warned!
+There are 3 server config options relating to Lua in the `Config.toml` file:
 
-You can also replace the Lua implementation:
-
-Edit the [mlua features](https://github.com/mlua-rs/mlua/blob/main/README.md#feature-flags)
-in `crates/core/Cargo.toml`, then comment out the
-`lua_state.sandbox(CONFIG.lua_enable_sandbox)?;` line in `crates/core/src/plot/mod.rs`.
+* `lua_script_path`: path to the script to execute in each plot
+* `lua_enable_sandbox`: enable [Luau sandboxing](https://luau.org/sandbox) when using Luau
+* `lua_enable_unsafe`: enable unsafe Lua libraries and loading external C modules
 
 
-## REPL Warning
+### Safety
 
-Hosting the default REPL script on your server means everyone who can
-connect to your server can run arbitrary commands on the host system!
-If you have sandboxing disabled, this is extra bad, as users could
-run regular shell commands using os.execute/io.popen, etc!
+If you're using 
+ * the default [Luau](https://luau.org/) implementation, *and*
+ * `lua_enable_unsafe = false`, *and*
+ * `lua_enable_sandbox = true`
+
+*then* the running Lua scripts *should be* reasonably safe towards the host system
+No guarantees towards the integrity of the server, game files, etc., of course!
+
+If you don't meet all of the above criteria, a malicious Lua script,
+or possibly even just malicious user input might compromise the server host
+system as well.
+
+In either case you should only install plugins from people you trust!
 
 You have been warned!
+
+See also:
+ * [Luau sandboxing](https://luau.org/sandbox)
+ * [mlua new](https://docs.rs/mlua/latest/mlua/struct.Lua.html#method.new)
+ * [mlua unsafe_new](https://docs.rs/mlua/latest/mlua/struct.Lua.html#method.unsafe_new)
 
 
 ## TODO
@@ -59,6 +71,9 @@ MCHPRS_API_VERSION
 MCHPRS_PLOT_X
 MCHPRS_PLOT_Z
 MCHPRS_PLOT_OWNER
+info(msg)
+warn(msg)
+err(msg)
 ```
 
 ### Callback Functions
@@ -99,6 +114,66 @@ plot.disableTicking
 plot.disableWorldFlush
 plot.worldSendRate
 ```
+
+
+### Plugin system
+
+The callbacks(as described above) are really what the MCHPRS-X server ends up
+looking up and executing from the globals table. This has a disadvantage:
+Without further work one can only ever load a single "plugin"(set of callbacks).
+
+Thankfully, the `plugin_loader.lua` file solves this problem:
+It registers callback handlers that check against a list of plugins providing callbacks.
+
+This way, every plugin can register its callbacks, and they get called in load order.
+
+The main Lua entry point `plugin_loader.lua`(configurable in the `Config.toml` file)
+eventually loads `plugins/init.lua` to load and register all plugins.
+This file needs to be edited by the user when installing plugins.
+
+The `load_plugin(plugin_name, config)` function called in that file does the plugin registration:
+it `require()`s the plugin from the `plugin/` directory and overloads some methods
+(e.g. logging functions prefixed with the plugin name) and fields(e.g. the config) on it.
+
+For this to work properly, plugins need to make sure they are loaded in the correct order,
+potentially with the right dependencies. This responibillity is left to the plugin developers!
+
+
+### Writing a plugin
+
+With all this said, writing a plugin is actually really simple. A single file
+suffices. To create a "hello world"-plugin that implements a `/hello` command,
+put this in a file `plugins/hello.lua`
+
+```lua
+-- create a plugin table
+-- This will be overloaded by the load_plugin function!
+local plugin = {
+    -- This information is mostly for the /plugins command and for future compatibility!
+	name = "Lua REPL",
+	description = "A simple Lua REPL implementing the /lua command",
+	version = {0,0,1},
+}
+function plugin:on_command(plot, player_uuid, command, args)
+    -- ignore commands other than /hello
+    -- non-truethy return value means this command wasn't handled
+    if command ~= "hello" then return; end
+
+    -- reply with a chat message
+    plot:sendChatMessage(player_uuid, "Hello World!")
+
+    -- returning any truethy value mean this command was handled by this plugin,
+    -- and no further plugins will be given this command.
+    return true
+end
+
+-- return the plugin structure!
+return plugin
+```
+
+Then add a single line like `load_plugin("hello")` to the `plugins/init.lua` file!
+Plugins are loaded when a plot loads, so you could just enter a *new* plot, or just restart the server!
+
 
 
 (Original README below)
