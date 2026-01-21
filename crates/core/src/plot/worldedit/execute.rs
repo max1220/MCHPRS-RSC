@@ -27,7 +27,7 @@ pub(super) fn execute_wand(ctx: CommandExecuteContext<'_>) {
             slot: 0,
             item: ctx.player.inventory[(ctx.player.selected_slot + 36) as usize]
                 .as_ref()
-                .map(|item| utils::encode_slot_data(&item)),
+                .map(utils::encode_slot_data),
         }],
     }
     .encode();
@@ -967,6 +967,7 @@ pub(super) fn execute_rstack(ctx: CommandExecuteContext<'_>) {
         ));
         paste_clipboard(ctx.plot, &clipboard, block_pos, !ctx.has_flag('a'));
     }
+    undo_cbs.reverse();
     let undo = WorldEditUndo {
         clipboards: undo_cbs,
         pos: pos1,
@@ -996,16 +997,14 @@ pub(super) fn execute_update(ctx: CommandExecuteContext<'_>) {
 
     let (first_pos, second_pos) = if ctx.has_flag('p') {
         ctx.plot.get_corners()
+    } else if let (Some(first_pos), Some(second_pos)) =
+        (ctx.player.first_position, ctx.player.second_position)
+    {
+        (first_pos, second_pos)
     } else {
-        if let (Some(first_pos), Some(second_pos)) =
-            (ctx.player.first_position, ctx.player.second_position)
-        {
-            (first_pos, second_pos)
-        } else {
-            ctx.player
-                .send_error_message("Your selection is incomplete.");
-            return;
-        }
+        ctx.player
+            .send_error_message("Your selection is incomplete.");
+        return;
     };
 
     update(ctx.plot, first_pos, second_pos);

@@ -1,7 +1,6 @@
 use crate::config::CONFIG;
 use crate::player::Player;
-use crate::plot::PlotWorld;
-use crate::plot::PLOT_BLOCK_HEIGHT;
+use crate::plot::{PlotWorld, PLOT_BLOCK_HEIGHT};
 use mchprs_blocks::block_entities::BlockEntity;
 use mchprs_blocks::blocks::*;
 use mchprs_blocks::items::{Item, ItemStack};
@@ -35,6 +34,16 @@ pub fn on_use(
                 }
             }
             ActionResult::Success
+        }
+        Block::EndPortalFrame { eye, facing } => {
+            if let Some(Item::EnderEye {}) = item_in_hand {
+                if !eye {
+                    world.set_block(pos, Block::EndPortalFrame { eye: true, facing });
+                    redstone::update_surrounding_blocks(world, pos);
+                    return ActionResult::Success;
+                }
+            }
+            ActionResult::Pass
         }
         b if b.has_block_entity() => {
             // Open container
@@ -184,6 +193,10 @@ pub fn get_state_for_placement(
         Item::HayBlock {} => Block::HayBlock {},
         Item::Sand {} => Block::Sand {},
         Item::StoneBricks {} => Block::StoneBricks {},
+        Item::EndPortalFrame {} => Block::EndPortalFrame {
+            eye: false,
+            facing: context.player.get_direction().opposite(),
+        },
         _ => Block::Air {},
     };
     if is_valid_position(block, world, pos) {

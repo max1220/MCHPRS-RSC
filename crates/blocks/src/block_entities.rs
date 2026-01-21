@@ -39,14 +39,13 @@ impl FromStr for ContainerType {
     }
 }
 
-impl ToString for ContainerType {
-    fn to_string(&self) -> String {
-        match self {
+impl std::fmt::Display for ContainerType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
             ContainerType::Furnace => "minecraft:furnace",
             ContainerType::Barrel => "minecraft:barrel",
             ContainerType::Hopper => "minecraft:hopper",
-        }
-        .to_owned()
+        })
     }
 }
 
@@ -111,7 +110,7 @@ impl BlockEntity {
                     .or_else(|| item_compound.get("id"))?,
                 Value::String
             );
-            let item_type = Item::from_name(namespaced_name.split(':').last()?);
+            let item_type = Item::from_name(namespaced_name.split(':').next_back()?);
 
             let mut blob = nbt::Blob::new();
             for (k, v) in item_compound {

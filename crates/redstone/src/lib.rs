@@ -10,8 +10,7 @@ pub mod wire;
 use mchprs_blocks::block_entities::BlockEntity;
 use mchprs_blocks::blocks::{Block, ButtonFace, LeverFace, RedstoneWire};
 use mchprs_blocks::{BlockDirection, BlockFace, BlockPos};
-use mchprs_world::TickPriority;
-use mchprs_world::World;
+use mchprs_world::{TickPriority, World};
 
 pub fn bool_to_ss(b: bool) -> u8 {
     match b {
@@ -28,7 +27,7 @@ fn get_weak_power(
     dust_power: bool,
 ) -> u8 {
     match block {
-        Block::RedstoneTorch { lit: true } => 15,
+        Block::RedstoneTorch { lit: true } if side != BlockFace::Top => 15,
         Block::RedstoneWallTorch { lit: true, facing } if facing.block_face() != side => 15,
         Block::RedstoneBlock {} => 15,
         Block::StonePressurePlate { powered: true } => 15,

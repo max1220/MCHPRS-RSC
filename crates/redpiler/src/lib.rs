@@ -1,14 +1,13 @@
 mod backend;
 mod compile_graph;
-mod task_monitor;
-// mod debug_graph;
 mod passes;
+mod ril;
+mod task_monitor;
 
 use backend::{BackendDispatcher, JITBackend};
 use mchprs_blocks::blocks::Block;
 use mchprs_blocks::BlockPos;
-use mchprs_world::TickEntry;
-use mchprs_world::{for_each_block_mut_optimized, World};
+use mchprs_world::{for_each_block_mut_optimized, TickEntry, World};
 use passes::make_default_pass_manager;
 use std::sync::Arc;
 use std::time::Instant;
@@ -46,6 +45,10 @@ pub struct CompilerOptions {
     pub export_dot_graph: bool,
     /// Consider a redstone dot to be an output block (for color screens)
     pub wire_dot_out: bool,
+    /// Print out the RIL circuit after every redpiler pass
+    pub print_after_all: bool,
+    /// Print out the RIL circuit before starting backend compile
+    pub print_before_backend: bool,
     /// The backend variant to be used after compilation
     pub backend_variant: BackendVariant,
 }
@@ -69,6 +72,8 @@ impl CompilerOptions {
                     "--update" => co.update = true,
                     "--export-dot" => co.export_dot_graph = true,
                     "--wire-dot-out" => co.wire_dot_out = true,
+                    "--print-after-all" => co.print_after_all = true,
+                    "--print-before-backend" => co.print_before_backend = true,
                     // FIXME: use actual error handling
                     _ => warn!("Unrecognized option: {}", option),
                 }
@@ -253,6 +258,8 @@ mod tests {
             update: true,
             export_dot_graph: false,
             wire_dot_out: false,
+            print_after_all: false,
+            print_before_backend: false,
             backend_variant: BackendVariant::default(),
         };
         let options = CompilerOptions::parse(input);

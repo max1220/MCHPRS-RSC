@@ -1,3 +1,4 @@
+mod analysis;
 mod clamp_weights;
 mod coalesce;
 mod constant_coalesce;
@@ -11,12 +12,16 @@ mod unreachable_output;
 
 use mchprs_world::World;
 
+use crate::ril::DumpGraph;
+
 use super::compile_graph::CompileGraph;
 use super::task_monitor::TaskMonitor;
 use super::{CompilerInput, CompilerOptions};
+use std::any::{Any, TypeId};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use tracing::trace;
+use tracing::{debug, trace};
 
 pub const fn make_default_pass_manager<'w, W: World>() -> PassManager<'w, W> {
     PassManager::new(&[
@@ -25,12 +30,34 @@ pub const fn make_default_pass_manager<'w, W: World>() -> PassManager<'w, W> {
         &clamp_weights::ClampWeights,
         &dedup_links::DedupLinks,
         &constant_fold::ConstantFold,
+        &analysis::ss_range_analysis::SSRangeAnalysis,
         &unreachable_output::UnreachableOutput,
         &constant_coalesce::ConstantCoalesce,
         &coalesce::Coalesce,
         &prune_orphans::PruneOrphans,
         &export_graph::ExportGraph,
     ])
+}
+
+pub trait AnalysisInfo: Any {}
+
+#[derive(Default)]
+pub struct AnalysisInfos {
+    analysis_infos: HashMap<TypeId, Box<dyn AnalysisInfo>>,
+}
+
+impl AnalysisInfos {
+    pub fn insert_analysis<A: AnalysisInfo>(&mut self, analysis: A) {
+        self.analysis_infos
+            .insert(analysis.type_id(), Box::new(analysis));
+    }
+
+    pub fn get_analysis<A: AnalysisInfo>(&self) -> Option<&A> {
+        let type_id = TypeId::of::<A>();
+        self.analysis_infos
+            .get(&type_id)
+            .and_then(|ai| (ai.as_ref() as &dyn Any).downcast_ref())
+    }
 }
 
 pub struct PassManager<'p, W: World> {
@@ -53,6 +80,8 @@ impl<'p, W: World> PassManager<'p, W> {
         // Add one for the backend compile step
         monitor.set_max_progress(self.passes.len() + 1);
 
+        let mut analysis_infos = AnalysisInfos::default();
+
         for &pass in self.passes {
             if !pass.should_run(options) {
                 trace!("Skipping pass: {}", pass.name());
@@ -68,12 +97,22 @@ impl<'p, W: World> PassManager<'p, W> {
             monitor.set_message(pass.status_message().to_string());
             let start = Instant::now();
 
-            pass.run_pass(&mut graph, options, input);
+            pass.run_pass(&mut graph, options, input, &mut analysis_infos);
 
             trace!("Completed pass in {:?}", start.elapsed());
             trace!("node_count: {}", graph.node_count());
             trace!("edge_count: {}", graph.edge_count());
             monitor.inc_progress();
+
+            if options.print_after_all {
+                debug!("Printing circuit after pass: {}", pass.name());
+                graph.dump();
+            }
+        }
+
+        if options.print_before_backend {
+            debug!("Printing circuit before backend compile:");
+            graph.dump();
         }
 
         graph
@@ -86,6 +125,7 @@ pub trait Pass<W: World> {
         graph: &mut CompileGraph,
         options: &CompilerOptions,
         input: &CompilerInput<'_, W>,
+        analysis_infos: &mut AnalysisInfos,
     );
 
     /// This name should only be use for debugging purposes,

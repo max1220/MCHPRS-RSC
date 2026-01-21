@@ -1,5 +1,4 @@
 use mchprs_blocks::blocks::ComparatorMode;
-use smallvec::SmallVec;
 use std::num::NonZeroU8;
 use std::ops::{Index, IndexMut};
 
@@ -141,7 +140,7 @@ pub struct NonMaxU8(NonZeroU8);
 
 impl NonMaxU8 {
     pub fn new(value: u8) -> Option<Self> {
-        NonZeroU8::new(value + 1).map(|x| Self(x))
+        NonZeroU8::new(value + 1).map(Self)
     }
 
     pub fn get(self) -> u8 {
@@ -149,12 +148,22 @@ impl NonMaxU8 {
     }
 }
 
+// The `Node` struct's size is currently 64 bytes which happens to be the same
+// size as an L1 cache line on most modern processors. By forcing a 64-byte
+// alignment, we make sure that the entire `Node` can fit on one cache line,
+// preventing scenarios where we have to fetch 2 cache lines to read a single `Node`.
+#[repr(align(64))]
 #[derive(Debug, Clone)]
 pub struct Node {
     pub ty: NodeType,
     pub default_inputs: NodeInput,
     pub side_inputs: NodeInput,
-    pub updates: SmallVec<[ForwardLink; 10]>,
+
+    /// The index to the first forward link of this node.
+    pub fwd_link_begin: usize,
+    /// The index to after the last forward link of this node.
+    pub fwd_link_end: usize,
+
     pub is_io: bool,
 
     /// Powered or lit
