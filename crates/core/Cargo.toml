@@ -1,3 +1,6 @@
+[features]
+luau = []
+
 [package]
 name = "mchprs_core"
 authors.workspace = true

@@ -69,6 +69,7 @@ gen_config! {
     chat_format: String = "<{username}> {message}".to_string(),
     lua_script_path: Option<String> = None,
     lua_enable_sandbox: bool = true,
+    lua_enable_unsafe: bool = true,
     max_players: i64 = 99999,
     view_distance: i64 = 8,
     whitelist: bool = false,

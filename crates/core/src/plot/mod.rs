@@ -1461,8 +1461,10 @@ impl Plot {
         );
 
         // create Lua state and assign some global variables
-        let lua_state = Lua::new();
-        lua_state.sandbox(CONFIG.lua_enable_sandbox)?;
+        let lua_state = if CONFIG.lua_enable_unsafe { unsafe { Lua::unsafe_new() } } else { Lua::new()};
+        if cfg!(feature = "luau") {
+            lua_state.sandbox(CONFIG.lua_enable_sandbox)?;
+        }
         let globals = lua_state.globals();
         globals.set("MCHPRS_API_VERSION", "0.0.0")?;
         globals.set("MCHPRS_PLOT_X", self.world.x)?;
