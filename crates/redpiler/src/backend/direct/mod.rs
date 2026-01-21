@@ -6,6 +6,7 @@ mod tick;
 mod update;
 
 use super::JITBackend;
+use crate::backend::direct::node::ForwardLink;
 use crate::compile_graph::CompileGraph;
 use crate::task_monitor::TaskMonitor;
 use crate::{block_powered_mut, CompilerOptions};
@@ -13,8 +14,7 @@ use mchprs_blocks::block_entities::BlockEntity;
 use mchprs_blocks::blocks::{Block, ComparatorMode, Instrument};
 use mchprs_blocks::BlockPos;
 use mchprs_redstone::{bool_to_ss, noteblock};
-use mchprs_world::World;
-use mchprs_world::{TickEntry, TickPriority};
+use mchprs_world::{TickEntry, TickPriority, World};
 use node::{Node, NodeId, NodeType, Nodes};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
@@ -26,9 +26,7 @@ struct Queues([Vec<NodeId>; TickScheduler::NUM_PRIORITIES]);
 
 impl Queues {
     fn drain_iter(&mut self) -> impl Iterator<Item = NodeId> + '_ {
-        let [q0, q1, q2, q3] = &mut self.0;
-        let [q0, q1, q2, q3] = [q0, q1, q2, q3].map(|q| q.drain(..));
-        q0.chain(q1).chain(q2).chain(q3)
+        self.0.iter_mut().flat_map(|q| q.drain(..))
     }
 }
 
@@ -110,6 +108,7 @@ enum Event {
 #[derive(Default)]
 pub struct DirectBackend {
     nodes: Nodes,
+    forward_links: Vec<ForwardLink>,
     blocks: Vec<Option<(BlockPos, Block)>>,
     pos_map: FxHashMap<BlockPos, NodeId>,
     scheduler: TickScheduler,
@@ -129,12 +128,11 @@ impl DirectBackend {
         node.changed = true;
         node.powered = powered;
         node.output_power = new_power;
-        for i in 0..node.updates.len() {
-            let node = &self.nodes[node_id];
-            let update_link = unsafe { *node.updates.get_unchecked(i) };
-            let side = update_link.side();
-            let distance = update_link.ss();
-            let update = update_link.node();
+
+        for forward_link in &self.forward_links[node.fwd_link_begin..node.fwd_link_end] {
+            let side = forward_link.side();
+            let distance = forward_link.ss();
+            let update = forward_link.node();
 
             let update_ref = &mut self.nodes[update];
             let inputs = if side {
@@ -197,6 +195,7 @@ impl JITBackend for DirectBackend {
             }
         }
 
+        self.forward_links.clear();
         self.pos_map.clear();
         self.noteblock_info.clear();
         self.events.clear();
@@ -308,16 +307,14 @@ fn schedule_tick(
     scheduler.schedule_tick(node_id, delay, priority);
 }
 
-const BOOL_INPUT_MASK: u128 = u128::from_ne_bytes([
-    0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-]);
-
 fn get_bool_input(node: &Node) -> bool {
-    u128::from_le_bytes(node.default_inputs.ss_counts) & BOOL_INPUT_MASK != 0
+    // During compilation its ensured all signal strength buckets add up to 255
+    // So if and only if the zero bucket contains 255 is the input zero
+    node.default_inputs.ss_counts[0] != 255
 }
 
 fn get_bool_side(node: &Node) -> bool {
-    u128::from_le_bytes(node.side_inputs.ss_counts) & BOOL_INPUT_MASK != 0
+    node.side_inputs.ss_counts[0] != 255
 }
 
 fn last_index_positive(array: &[u8; 16]) -> u32 {
@@ -338,7 +335,8 @@ fn get_all_input(node: &Node) -> (u8, u8) {
     (input_power, side_input_power)
 }
 
-// This function is optimized for input values from 0 to 15 and does not work correctly outside that range
+// This function is optimized for input values from 0 to 15 and does not work correctly outside that
+// range
 fn calculate_comparator_output(mode: ComparatorMode, input_strength: u8, power_on_sides: u8) -> u8 {
     let difference = input_strength.wrapping_sub(power_on_sides);
     if difference <= 15 {
@@ -360,7 +358,7 @@ impl fmt::Display for DirectBackend {
             }
             let label = match node.ty {
                 NodeType::Repeater { delay, .. } => format!("Repeater({})", delay),
-                NodeType::Torch => format!("Torch"),
+                NodeType::Torch => "Torch".to_string(),
                 NodeType::Comparator { mode, .. } => format!(
                     "Comparator({})",
                     match mode {
@@ -368,14 +366,14 @@ impl fmt::Display for DirectBackend {
                         ComparatorMode::Subtract => "Sub",
                     }
                 ),
-                NodeType::Lamp => format!("Lamp"),
-                NodeType::Button => format!("Button"),
-                NodeType::Lever => format!("Lever"),
-                NodeType::PressurePlate => format!("PressurePlate"),
-                NodeType::Trapdoor => format!("Trapdoor"),
-                NodeType::Wire => format!("Wire"),
+                NodeType::Lamp => "Lamp".to_string(),
+                NodeType::Button => "Button".to_string(),
+                NodeType::Lever => "Lever".to_string(),
+                NodeType::PressurePlate => "PressurePlate".to_string(),
+                NodeType::Trapdoor => "Trapdoor".to_string(),
+                NodeType::Wire => "Wire".to_string(),
                 NodeType::Constant => format!("Constant({})", node.output_power),
-                NodeType::NoteBlock { .. } => format!("NoteBlock"),
+                NodeType::NoteBlock { .. } => "NoteBlock".to_string(),
             };
             let pos = if let Some((pos, _)) = self.blocks[id] {
                 format!("{}, {}, {}", pos.x, pos.y, pos.z)
@@ -383,7 +381,7 @@ impl fmt::Display for DirectBackend {
                 "No Pos".to_string()
             };
             writeln!(f, "    n{} [ label = \"{}\\n({})\" ];", id, label, pos)?;
-            for link in node.updates.iter() {
+            for link in &self.forward_links[node.fwd_link_begin..node.fwd_link_end] {
                 let out_index = link.node().index();
                 let distance = link.ss();
                 let color = if link.side() { ",color=\"blue\"" } else { "" };

@@ -25,8 +25,7 @@ use mchprs_redpiler::{Compiler, CompilerOptions};
 use mchprs_save_data::plot_data::{ChunkData, PlotData, Tps, WorldSendRate};
 use mchprs_text::TextComponent;
 use mchprs_world::storage::Chunk;
-use mchprs_world::World;
-use mchprs_world::{TickEntry, TickPriority};
+use mchprs_world::{TickEntry, TickPriority, World};
 use monitor::TimingsMonitor;
 use scoreboard::RedpilerState;
 use std::cmp::Ordering;
@@ -204,10 +203,7 @@ impl World for PlotWorld {
     }
 
     fn get_block_entity(&self, pos: BlockPos) -> Option<&BlockEntity> {
-        let chunk_index = match self.get_chunk_index_for_block(pos.x, pos.z) {
-            Some(idx) => idx,
-            None => return None,
-        };
+        let chunk_index = self.get_chunk_index_for_block(pos.x, pos.z)?;
         let chunk = &self.chunks[chunk_index];
         chunk.get_block_entity(BlockPos::new(pos.x & 0xF, pos.y, pos.z & 0xF))
     }
@@ -264,10 +260,11 @@ impl World for PlotWorld {
         volume: f32,
         pitch: f32,
     ) {
-        // FIXME: We do not know the players location here, so we send the sound packet to all players
-        // A notchian server would only send to players in hearing distance (volume.clamp(0.0, 1.0) * 16.0)
+        // FIXME: We do not know the players location here, so we send the sound packet to all
+        // players A notchian server would only send to players in hearing distance
+        // (volume.clamp(0.0, 1.0) * 16.0)
         let sound_effect_data = CSoundEffect {
-            sound_id,
+            sound_id: sound_id + 1,
             sound_name: None,
             has_fixed_range: None,
             range: None,
@@ -627,15 +624,13 @@ impl Plot {
         if let Some(item) = &item_in_hand {
             let has_permission = self.players[player].has_permission("worldedit.selection.pos");
             if item.item_type == (Item::WEWand {}) && has_permission {
-                let same = self.players[player]
-                    .second_position
-                    .map_or(false, |p| p == block_pos);
+                let same = self.players[player].second_position == Some(block_pos);
                 if !same {
                     self.players[player].worldedit_set_second_position(block_pos);
                 }
                 cancel(self);
-                // FIXME: Because the client sends another packet after this for the left hand for most blocks,
-                // redpiler will get reset anyways.
+                // FIXME: Because the client sends another packet after this for the left hand for
+                // most blocks, redpiler will get reset anyways.
                 return;
             }
         }
@@ -713,7 +708,8 @@ impl Plot {
             return;
         }
 
-        // This worldedit wand stuff should probably be done in another file. It's good enough for now.
+        // This worldedit wand stuff should probably be done in another file. It's good enough for
+        // now.
         let item_in_hand = self.players[player].inventory
             [self.players[player].selected_slot as usize + 36]
             .clone();
@@ -801,7 +797,7 @@ impl Plot {
         thread::scope(|s| {
             let handle = s.spawn(|| {
                 self.redpiler
-                    .compile(&mut self.world, bounds, options, ticks, monitor)
+                    .compile(&self.world, bounds, options, ticks, monitor)
             });
             while !handle.is_finished() {
                 // We'll update the players so that they don't time out.
@@ -828,7 +824,8 @@ impl Plot {
         self.reset_timings();
     }
 
-    /// Redpiler needs to reset implicitly in the case of any block changes done by a player. This can be
+    /// Redpiler needs to reset implicitly in the case of any block changes done by a player. This
+    /// can be
     fn reset_redpiler(&mut self) {
         if self.redpiler.is_active() {
             debug!("Discarding redpiler");
@@ -974,14 +971,13 @@ impl Plot {
                     let player_info = CPlayerInfoUpdate {
                         players: vec![CPlayerInfoUpdatePlayer {
                             uuid: player_join_info.uuid,
-                            actions: {
-                                let mut actions: CPlayerInfoActions = Default::default();
-                                actions.add_player = Some(CPlayerInfoAddPlayer {
+                            actions: CPlayerInfoActions {
+                                add_player: Some(CPlayerInfoAddPlayer {
                                     name: player_join_info.username,
                                     properties: player_join_info.properties,
-                                });
-                                actions.update_gamemode = Some(player_join_info.gamemode.get_id());
-                                actions
+                                }),
+                                update_gamemode: Some(player_join_info.gamemode.get_id()),
+                                ..Default::default()
                             },
                         }],
                     }
@@ -1016,10 +1012,9 @@ impl Plot {
                     let player_info = CPlayerInfoUpdate {
                         players: vec![CPlayerInfoUpdatePlayer {
                             uuid,
-                            actions: {
-                                let mut actions: CPlayerInfoActions = Default::default();
-                                actions.update_gamemode = Some(gamemode.get_id());
-                                actions
+                            actions: CPlayerInfoActions {
+                                update_gamemode: Some(gamemode.get_id()),
+                                ..Default::default()
                             },
                         }],
                     }
@@ -1138,7 +1133,8 @@ impl Plot {
             self.last_update_time = now;
             if batch_size != 0 {
                 // 50_000 (= 3.33 MHz) here is arbitrary.
-                // We just need a number that's not too high so we actually get around to sending block updates.
+                // We just need a number that's not too high so we actually get around to sending
+                // block updates.
                 let batch_size = batch_size.min(50_000) as u32;
                 let mut ticks_completed = batch_size;
                 if self.redpiler.is_active() {
@@ -1318,8 +1314,7 @@ impl Plot {
 
     fn save(&mut self) {
         let world = &mut self.world;
-        let chunk_data: Vec<ChunkData> =
-            world.chunks.iter_mut().map(|c| ChunkData::new(c)).collect();
+        let chunk_data: Vec<ChunkData> = world.chunks.iter_mut().map(ChunkData::new).collect();
         let data = PlotData {
             tps: self.tps,
             world_send_rate: self.world_send_rate,
@@ -1442,7 +1437,8 @@ impl Plot {
         self.save();
     }
 
-    /// This function is used in case of an error. It will try to send the player to spawn if this isn't already a spawn plot.
+    /// This function is used in case of an error. It will try to send the player to spawn if this
+    /// isn't already a spawn plot.
     fn send_player_away(plot_x: i32, plot_z: i32, player: &mut Player) {
         let (px, pz) = if plot_x == 0 && plot_z == 0 {
             // Can't send players to spawn if spawn crashed!

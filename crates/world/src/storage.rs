@@ -56,8 +56,7 @@ impl BitBuffer {
     pub fn create(bits_per_entry: u8, entries: usize) -> BitBuffer {
         // 4..9, 15
         let entries_per_long = 64 / bits_per_entry as u64;
-        // Rounding up div
-        let longs_len = (entries + entries_per_long as usize - 1) / entries_per_long as usize;
+        let longs_len = entries.div_ceil(entries_per_long as usize);
         let longs = vec![0; longs_len];
         BitBuffer {
             bits_per_entry: bits_per_entry as u64,
@@ -137,7 +136,7 @@ impl PalettedBitBuffer {
         }
     }
 
-    fn load(
+    pub fn load(
         entries: usize,
         bits_per_entry: u8,
         longs: Vec<u64>,
@@ -217,6 +216,18 @@ impl PalettedBitBuffer {
 
     pub fn entries(&self) -> usize {
         self.data.entries
+    }
+
+    pub fn palette(&self) -> &[u32] {
+        &self.palette
+    }
+
+    pub fn data(&self) -> &[u64] {
+        &self.data.longs
+    }
+
+    pub fn bits_per_entry(&self) -> u8 {
+        self.data.bits_per_entry as u8
     }
 
     #[cfg(feature = "networking")]
@@ -304,15 +315,15 @@ impl ChunkSection {
     }
 
     pub fn data(&self) -> &[u64] {
-        &self.buffer.data.longs
+        self.buffer.data()
     }
 
     pub fn palette(&self) -> &[u32] {
-        &self.buffer.palette
+        self.buffer.palette()
     }
 
     pub fn bits_per_block(&self) -> u8 {
-        self.buffer.data.bits_per_entry as u8
+        self.buffer.bits_per_entry()
     }
 
     pub fn block_count(&self) -> u32 {
@@ -404,8 +415,8 @@ impl Chunk {
     #[cfg(feature = "networking")]
     pub fn encode_packet(&self) -> PacketEncoder {
         let block_height = self.sections.len() * 16;
-        // Integer arithmetic trick: ceil(log2(x)) can be calculated with 32 - (x - 1).leading_zeros().
-        // See also: https://wiki.vg/Protocol#Chunk_Data_and_Update_Light
+        // Integer arithmetic trick: ceil(log2(x)) can be calculated with 32 - (x -
+        // 1).leading_zeros(). See also: https://wiki.vg/Protocol#Chunk_Data_and_Update_Light
         let heightmap_bits = (32 - ((block_height as u32 + 1) - 1).leading_zeros()) as u8;
         let mut heightmap_buffer = BitBuffer::create(heightmap_bits, 16 * 16);
         for x in 0..16 {
