@@ -1,4 +1,5 @@
 [features]
+default = ["luau"]
 luau = []
 
 [package]

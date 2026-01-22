@@ -18,7 +18,7 @@ if you don't trust me, review patches and build the project yourself
 This implementation currently uses [mlua](https://github.com/mlua-rs/mlua)
 as the Rust binding for Lua, which is configured to use the [Luau](https://luau.org/)
 Lua implementation by default.
-You can change the Lua implementation and mlua features flags in `crates/core/Cargo.toml`.
+You can change the Lua implementation and mlua [features](https://docs.rs/crate/mlua/latest/features) flags in `crates/core/Cargo.toml`.
 
 There are 3 server config options relating to Lua in the `Config.toml` file:
 
