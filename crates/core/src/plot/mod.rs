@@ -1462,13 +1462,6 @@ impl Plot {
         } else {
             Lua::new()
         };
-        if cfg!(feature = "luau") {
-            if CONFIG.lua_enable_sandbox {
-                lua_state.sandbox(true)?;
-            } else {
-                warn!("Luau sandbox is disabled via config!");
-            }
-        }
         let globals = lua_state.globals();
         globals.set("MCHPRS_API_VERSION", "0.0.0")?;
         globals.set("MCHPRS_PLOT_X", self.world.x)?;

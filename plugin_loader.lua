@@ -53,7 +53,7 @@ function load_plugin(plugin_name, config)
 	if plugins[plugin_name] then
 		return plugins[plugin_name]
 	end
-	local ok,plugin = pcall(require, "./plugins/"..plugin_name)
+	local ok,plugin = pcall(require, "plugins."..plugin_name..".init")
 	if not ok then
 		err("Can't load plugin '"..plugin_name.."': "..tostring(plugin))
 		return
@@ -89,7 +89,7 @@ local function pcall_wrap(name, fn, ...)
 end
 
 -- load the user-configured list of plugins
-pcall_wrap("plugin list", require, "./plugins")
+pcall_wrap("plugin list", require, "plugins.init")
 
 -- these callbacks forward a call to all loaded plugins
 function on_tick(...) for _, handler in ipairs(handlers.on_tick) do pcall_wrap("on_tick",handler.func, handler.plugin, ...) end end

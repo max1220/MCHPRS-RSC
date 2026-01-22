@@ -9,4 +9,4 @@ block_in_hitbox = true
 auto_redpiler = false
 lua_script_path = "./plugin_loader.lua"
 lua_enable_sandbox = true
-lua_enable_unsafe = false
+lua_enable_unsafe = true
