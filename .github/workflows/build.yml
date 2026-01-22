@@ -18,7 +18,7 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
           - target: x86_64-pc-windows-gnu
-            os: ubuntu-latest
+            os: debian-latest
             ext: .exe
       fail-fast: false
     runs-on: ${{ matrix.os }}
