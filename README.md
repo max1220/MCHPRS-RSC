@@ -98,7 +98,7 @@ plot:getBlockID(x,y,z)
 plot:getRedstonePower(x,y,z, face)
 plot:kickPlayer(player_uuid, reason)
 plot:listPlayers() -- Index is uuid. Every player has: username, uuid, x,y,z, yaw,pitch, first_x,first_y,first_z, second_x,second_y,second_z
-plot:send_block_change(x,y,z,block_id)
+plot:sendBlockChange(x,y,z,block_id)
 plot:sendChatMessage(player_uuid, message)
 plot:setBlockID(x,y,z, block_id)
 plot:teleportPlayer(player_uuid, x,y,z)

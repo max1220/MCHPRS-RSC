@@ -18,7 +18,7 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
           - target: x86_64-pc-windows-gnu
-            os: debian-latest
+            os: ubuntu-latest
             ext: .exe
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -35,7 +35,7 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Download MinGW
-        run: sudo apt-get update && sudo apt-get install mingw-w64
+        run: sudo apt-get update && sudo apt-get install mingw-w64 binutils-mingw-w64
 
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
