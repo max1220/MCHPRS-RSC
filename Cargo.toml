@@ -14,15 +14,15 @@ license.workspace = true
 repository.workspace = true
 
 [workspace.package]
-authors = ["StackDoubleFlow <ojaslandge@gmail.com>"]
-description = "A multithreaded minecraft server built for redstone."
-edition = "2021"
-homepage = "https://github.com/MCHPR/MCHPRS"
+authors = ["StackDoubleFlow <ojaslandge@gmail.com>", "max1220"]
+description = "A multithreaded minecraft server built for redstone. (Fork adding Lua support)"
+edition = "2026"
+homepage = "https://github.com/max1220/MCHPRS-X"
 keywords = ["minecraft", "server", "redstone"]
 readme = "README.md"
-version = "0.4.1"
+version = "0.4.1-lua"
 license = "MIT"
-repository = "https://github.com/MCHPR/MCHPRS"
+repository = "https://github.com/max1220/MCHPRS-X"
 
 include = ["**/*.rs", "Cargo.toml"]
 
