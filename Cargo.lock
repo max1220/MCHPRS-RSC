@@ -1212,7 +1212,7 @@ dependencies = [
 
 [[package]]
 name = "mchprs"
-version = "0.4.1"
+version = "0.4.2-lua"
 dependencies = [
  "mchprs_blocks",
  "mchprs_core",
@@ -1227,7 +1227,7 @@ dependencies = [
 
 [[package]]
 name = "mchprs_blocks"
-version = "0.4.1"
+version = "0.4.2-lua"
 dependencies = [
  "hematite-nbt",
  "mchprs_proc_macros",
@@ -1237,7 +1237,7 @@ dependencies = [
 
 [[package]]
 name = "mchprs_core"
-version = "0.4.1"
+version = "0.4.2-lua"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -1278,7 +1278,7 @@ dependencies = [
 
 [[package]]
 name = "mchprs_network"
-version = "0.4.1"
+version = "0.4.2-lua"
 dependencies = [
  "bitvec",
  "byteorder",
@@ -1291,7 +1291,7 @@ dependencies = [
 
 [[package]]
 name = "mchprs_proc_macros"
-version = "0.4.1"
+version = "0.4.2-lua"
 dependencies = [
  "quote",
  "syn",
@@ -1325,7 +1325,7 @@ dependencies = [
 
 [[package]]
 name = "mchprs_save_data"
-version = "0.4.1"
+version = "0.4.2-lua"
 dependencies = [
  "bincode",
  "byteorder",
@@ -1349,11 +1349,11 @@ dependencies = [
 
 [[package]]
 name = "mchprs_utils"
-version = "0.4.1"
+version = "0.4.2-lua"
 
 [[package]]
 name = "mchprs_world"
-version = "0.4.1"
+version = "0.4.2-lua"
 dependencies = [
  "hematite-nbt",
  "mchprs_blocks",
@@ -1364,7 +1364,7 @@ dependencies = [
 
 [[package]]
 name = "mchprs_world_exporter"
-version = "0.4.1"
+version = "0.4.2-lua"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1880,7 +1880,7 @@ dependencies = [
 
 [[package]]
 name = "redpiler_graph"
-version = "0.4.1"
+version = "0.4.2-lua"
 dependencies = [
  "bincode",
  "serde",
