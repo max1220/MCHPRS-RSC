@@ -13,12 +13,12 @@ jobs:
       matrix:
         target:
           - x86_64-unknown-linux-gnu
-          - x86_64-pc-windows-gnu
+          - x86_64-pc-windows-msvc
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-          - target: x86_64-pc-windows-gnu
-            os: ubuntu-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
             ext: .exe
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -34,10 +34,9 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      - name: Download MinGW
-        run: sudo apt-get update && sudo apt-get install mingw-w64 binutils-mingw-w64
-
       - name: Build
+        env:
+          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld.exe
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Upload artifact
